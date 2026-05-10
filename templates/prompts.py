@@ -12,6 +12,11 @@ Include the keyword '{keyword}' naturally.
 Make it sound like a friend giving advice, not an encyclopedia entry.
 """
 
+REVIEWS_HEADER_TEMPLATE = """
+Generate a conversational heading for the detailed product reviews section (e.g., 'A Closer Look: Our In-Depth Reviews').
+Return ONLY the heading text.
+"""
+
 REVIEW_TEMPLATE = """
 Create a 'Product Card' for this Amazon item:
 Title: {title}
@@ -29,6 +34,7 @@ Instructions:
 """
 
 COMPARISON_TEMPLATE = """
+Start with a conversational heading (e.g., 'Side-by-Side: How They Compare').
 Generate a detailed TRANSPOSED HTML comparison table. 
 - Identify 6-8 of the most important technical specifications/features specifically relevant to this product category.
 - The first column must be 'Feature'.
@@ -39,8 +45,33 @@ Generate a detailed TRANSPOSED HTML comparison table.
 """
 
 FAQ_TEMPLATE = """
+Start with a conversational heading (e.g., 'Questions? We've Got Answers').
 Generate 3 'Real-World' FAQs for '{topic}'. 
 Answer them briefly and helpfully. Include JSON-LD schema.
+"""
+
+QUICK_SUMMARY_TEMPLATE = """
+Start with a conversational heading (e.g., 'The Quick Version: Our Top Picks').
+Write a 'Quick Summary' for this guide on '{topic}'. 
+Include:
+1. A 'Top Pick' with a brief reason why.
+2. A 'Best Budget' option.
+3. A 'Premium Choice'.
+Keep it extremely concise and scan-friendly using a simple HTML list.
+"""
+
+CONCLUSION_TEMPLATE = """
+Start with a conversational heading (e.g., 'The Final Word' or 'Wrapping Up').
+Write a final 'Conclusion' for this buying guide on '{topic}'. 
+Summarize what the reader should look for and give a final expert recommendation based on different user needs.
+Use a helpful, encouraging tone.
+"""
+
+RELATED_ARTICLES_TEMPLATE = """
+Start with a conversational heading (e.g., 'More for Your Setup' or 'You Might Also Like').
+Generate a 'Related Reading' section with 3 internal-style link titles related to '{topic}'.
+Do NOT include actual links, just the titles wrapped in <ul><li> tags.
+Example: 'How to Choose the Perfect {keyword} for Your Setup'
 """
 
 SEO_TAGS_TEMPLATE = """

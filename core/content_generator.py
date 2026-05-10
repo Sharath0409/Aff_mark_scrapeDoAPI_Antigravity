@@ -2,7 +2,12 @@ from openai import OpenAI
 from config.logger import get_logger
 from config import settings
 from utils.retry import get_retry_decorator
-from templates.prompts import SYSTEM_PROMPT, INTRO_TEMPLATE, REVIEW_TEMPLATE, COMPARISON_TEMPLATE, FAQ_TEMPLATE, SEO_TAGS_TEMPLATE
+from templates.prompts import (
+    SYSTEM_PROMPT, INTRO_TEMPLATE, REVIEW_TEMPLATE, 
+    COMPARISON_TEMPLATE, FAQ_TEMPLATE, SEO_TAGS_TEMPLATE,
+    QUICK_SUMMARY_TEMPLATE, CONCLUSION_TEMPLATE, RELATED_ARTICLES_TEMPLATE,
+    REVIEWS_HEADER_TEMPLATE
+)
 from utils.text_cleaner import sanitize_html
 import re
 
@@ -62,17 +67,19 @@ class ContentGenerator:
         return safe_tags
         
     def generate_full_post(self, topic, keyword, products):
-        """Assemble the complete blog post with visual styling."""
+        """Assemble the complete blog post with visual styling and all requested sections."""
         logger.info("Starting full post generation")
         
         # 0. CSS Styles for a modern, fluid editorial layout
         style_block = """
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
-            .blog-container { max-width: 850px; margin: 0 auto; padding: 10px; color: #333; line-height: 1.8; font-family: 'Inter', -apple-system, sans-serif; }
+            .blog-container { max-width: 850px; margin: 0 auto; padding: 10px; color: #333; line-height: 1.8; font-family: 'Inter', -apple-system, sans-serif; text-align: justify; hyphens: auto; }
+            .section-divider { margin: 60px 0; border: none; border-top: 1px solid #eee; }
             .product-section { margin-bottom: 60px; padding-bottom: 40px; border-bottom: 1px solid #eee; }
             .product-section:last-of-type { border-bottom: none; }
             .product-title { color: #111; font-size: 2em; font-weight: 800; margin-bottom: 20px; line-height: 1.2; text-align: center; }
+            h1, h2 { text-align: center; margin-top: 50px; }
             .product-image-centered { text-align: center; margin-bottom: 30px; }
             .product-image-centered img { max-width: 100%; height: auto; border-radius: 8px; max-height: 400px; }
             .product-summary-full { margin-bottom: 30px; }
@@ -81,15 +88,13 @@ class ContentGenerator:
             .pros-cons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 25px 0; }
             .pros-list h4 { color: #059669; margin-top: 0; }
             .cons-list h4 { color: #dc2626; margin-top: 0; }
-            .pros-list ul, .cons-list ul { padding-left: 20px; margin: 0; }
             .buy-button-wrapper { text-align: center; margin-top: 40px; }
-            .buy-btn { display: inline-block; background: #fbbf24; color: #000 !important; padding: 16px 40px; border-radius: 4px; text-decoration: none !important; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #d97706; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-            .buy-btn:hover { background: #f59e0b; transform: translateY(-1px); }
-            .comparison-table-wrapper { overflow-x: auto; margin: 60px 0; border: 1px solid #eee; border-radius: 8px; }
+            .buy-btn { display: inline-block; background: #fbbf24; color: #000 !important; padding: 16px 40px; border-radius: 4px; text-decoration: none !important; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #d97706; transition: all 0.2s; }
+            .comparison-table-wrapper { overflow-x: auto; margin: 40px 0; border: 1px solid #eee; border-radius: 8px; }
             .comparison-table { width: 100%; border-collapse: collapse; min-width: 600px; }
             .comparison-table td, .comparison-table th { padding: 15px; border: 1px solid #eee; font-size: 0.95em; }
-            .comparison-table th { background: #f8fafc; color: #475569; font-weight: 700; text-align: left; width: 150px; }
-            .comparison-table tr td:first-child { font-weight: 700; background: #f8fafc; }
+            .comparison-table th { background: #f8fafc; color: #475569; font-weight: 700; text-align: left; }
+            .quick-summary-box { background: #fffbeb; border: 1px solid #fef3c7; padding: 25px; border-radius: 12px; margin: 40px 0; }
             @media (max-width: 640px) { .pros-cons-grid { grid-template-columns: 1fr; } .product-title { font-size: 1.6em; } }
         </style>
         """
@@ -98,8 +103,19 @@ class ContentGenerator:
         intro_prompt = INTRO_TEMPLATE.format(topic=topic, keyword=keyword)
         intro_html = self.generate_section(intro_prompt, model="gpt-4o-mini")
         
-        # 2. Reviews
-        reviews_html = ""
+        # 2. Quick Summary (New)
+        qs_prompt = QUICK_SUMMARY_TEMPLATE.format(topic=topic)
+        qs_html = f'<div class="quick-summary-box">{self.generate_section(qs_prompt, model="gpt-4o-mini")}</div>'
+        
+        # 3. Comparison Table (Moved Up)
+        products_summary = "\n".join([f"- {p['title']} | {p['price']} | {p['rating']} | URL: {p.get('url', '#')}" for p in products])
+        comparison_prompt = COMPARISON_TEMPLATE + f"\n\nHere are the products:\n{products_summary}"
+        comparison_html = f'<div class="comparison-table-wrapper">{self.generate_section(comparison_prompt, model="gpt-4o")}</div>'
+        
+        # 4. Detailed Reviews
+        rh_prompt = REVIEWS_HEADER_TEMPLATE.format(topic=topic)
+        reviews_header = self.generate_section(rh_prompt, model="gpt-4o-mini")
+        reviews_html = f"<h2>{reviews_header}</h2>"
         for p in products:
             r_prompt = REVIEW_TEMPLATE.format(
                 title=p['title'], price=p['price'], 
@@ -108,11 +124,11 @@ class ContentGenerator:
             )
             
             review_content = self.generate_section(r_prompt, model="gpt-4o")
-            image_html = f'<div class="product-image-container"><img src="{p["image_url"]}" alt="{p["title"]}"></div>' if p.get('image_url') else ''
+            image_html = f'<div class="product-image-centered"><img src="{p["image_url"]}" alt="{p["title"]}"></div>' if p.get('image_url') else ''
             
             reviews_html += f"""
             <section class="product-section">
-                <h2 class="product-title">{p['title']}</h2>
+                <h3 class="product-title">{p['title']}</h3>
                 <div class="product-image-centered">
                     {image_html}
                 </div>
@@ -126,28 +142,33 @@ class ContentGenerator:
             </section>
             """
             
-        # 3. Comparison Table (Summary at the bottom)
-        products_summary = "\n".join([f"- {p['title']} | {p['price']} | {p['rating']} | URL: {p.get('url', '#')}" for p in products])
-        comparison_prompt = COMPARISON_TEMPLATE + f"\n\nHere are the products:\n{products_summary}"
-        comparison_html = f'<div class="comparison-table-wrapper">{self.generate_section(comparison_prompt, model="gpt-4o")}</div>'
-        
-        # 4. FAQ Section
+        # 5. FAQ Section
         faq_prompt = FAQ_TEMPLATE.format(topic=topic)
-        faq_html = self.generate_section(faq_prompt, model="gpt-4o-mini")
+        faq_html = self.generate_section(faq_prompt, model='gpt-4o-mini')
         
-        # 5. Footer
+        # 6. Conclusion (New)
+        conc_prompt = CONCLUSION_TEMPLATE.format(topic=topic)
+        conc_html = self.generate_section(conc_prompt, model='gpt-4o-mini')
+        
+        # 7. Related Articles (New)
+        rel_prompt = RELATED_ARTICLES_TEMPLATE.format(topic=topic, keyword=keyword)
+        rel_html = self.generate_section(rel_prompt, model='gpt-4o-mini')
+        
+        # 8. Footer
         footer_html = "\n<footer style='font-size: 0.9em; color: #666; border-top: 1px solid #eee; padding-top: 30px; margin-top: 60px;'><em>Disclaimer: This article contains affiliate links. If you click a link and make a purchase, we may earn a small commission at no extra cost to you.</em></footer>\n"
         
-        # Assemble parts to avoid f-string brace confusion with CSS
+        # Assemble parts in requested order
         parts = [
             '<div class="blog-container">',
             f'<h1 style="font-size: 2.5em; text-align: center; margin-bottom: 40px;">{topic}</h1>',
             style_block,
             intro_html,
-            reviews_html,
-            '<h2 style="margin-top: 80px; text-align: center;">At-A-Glance Comparison</h2>',
+            qs_html,
             comparison_html,
+            reviews_html,
             faq_html,
+            conc_html,
+            rel_html,
             footer_html,
             '</div>'
         ]
