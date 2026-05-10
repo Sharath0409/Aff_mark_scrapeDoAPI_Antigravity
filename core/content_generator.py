@@ -86,7 +86,8 @@ class ContentGenerator:
             .product-summary-full { margin-bottom: 30px; }
             .price-badge { display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.9em; margin-bottom: 15px; }
             .verdict-box { background: #f9fafb; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; font-style: italic; }
-            .pros-cons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 25px 0; }
+            .pros-cons-grid { display: block; margin: 25px 0; }
+            .pros-list { margin-bottom: 20px; }
             .pros-list h4 { color: #059669; margin-top: 0; }
             .cons-list h4 { color: #dc2626; margin-top: 0; }
             .buy-button-wrapper { text-align: center; margin-top: 40px; }
@@ -159,8 +160,16 @@ class ContentGenerator:
         try:
             soup = BeautifulSoup(rel_html, 'html.parser')
             related_topics = [li.get_text().strip() for li in soup.find_all('li')]
-            # Remove any trailing periods or extra quotes if AI added them
-            related_topics = [re.sub(r'["\.]', '', t).strip() for t in related_topics if t.strip()]
+            # Clean up punctuations, leading numbers (1. ), and extra quotes
+            clean_topics = []
+            for t in related_topics:
+                # Remove leading numbers/dots (e.g., "1. Topic" -> "Topic")
+                t = re.sub(r'^\d+[\.\)\s\-]+', '', t).strip()
+                # Remove wrapping quotes and trailing periods
+                t = t.strip('"').strip("'").rstrip('.')
+                if t:
+                    clean_topics.append(t)
+            related_topics = clean_topics
         except Exception as e:
             logger.error(f"Failed to parse related topics: {e}")
             related_topics = []
