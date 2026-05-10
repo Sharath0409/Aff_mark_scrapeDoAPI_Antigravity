@@ -2,6 +2,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from config.logger import get_logger
 from config import settings
+from utils.retry import get_retry_decorator
 
 logger = get_logger(__name__)
 
@@ -24,6 +25,7 @@ class BloggerPublisher:
             logger.error(f"Failed to initialize Blogger API: {e}")
             raise
         
+    @get_retry_decorator()
     def publish_post(self, title, content, labels=None):
         """Publish HTML payload to Blogger."""
         logger.info(f"Publishing post to Blogger: {title}")

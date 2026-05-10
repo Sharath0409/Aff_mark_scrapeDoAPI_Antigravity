@@ -64,10 +64,16 @@ def main():
         sheets.update_row_status(row_index, "Success", url=published_url)
         logger.info(f"Pipeline finished successfully for topic: {topic}")
         
+        # 8. Send Success Report
+        notifier.send_report("Success", topic, f"Post published at: {published_url}")
+        
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
-        # Update sheet with error
-        # sheets.update_row_status(row_index, "Failed", error=str(e))
+        # 9. Send Fatal Failure Report (after all retries failed)
+        try:
+            notifier.send_report("Failure", topic if 'topic' in locals() else "Unknown", str(e))
+        except:
+            pass
 
 if __name__ == "__main__":
     main()
