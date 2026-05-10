@@ -24,10 +24,16 @@ Include:
 
 COMPARISON_TEMPLATE = """
 Based on the products reviewed above, generate a comparative HTML table summarizing their key features and prices.
+Ensure the final row of the table for each product contains a "Check Price" button linking to the product URL provided.
 Use `<table class="comparison-table">`.
 """
 
 FAQ_TEMPLATE = """
 Generate a FAQ section for the topic '{topic}' with 3 common questions and answers.
 Also, output the corresponding JSON-LD FAQ schema.
+"""
+
+SEO_TAGS_TEMPLATE = """
+Generate a comma-separated list of 5 to 8 highly relevant, SEO-optimized keywords and tags for a blog post about '{topic}' (main keyword: '{keyword}').
+Return ONLY the comma-separated string, with no quotes, bullet points, or extra text.
 """

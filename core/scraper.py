@@ -4,6 +4,7 @@ from config.logger import get_logger
 from utils.retry import get_retry_decorator
 from config import settings
 from urllib.parse import urljoin
+from utils.affiliate import inject_affiliate_tag
 import time
 import random
 
@@ -86,7 +87,7 @@ class AmazonScraper:
             "rating": "No rating",
             "review_count": "0",
             "features": "No features found",
-            "url": url
+            "url": inject_affiliate_tag(url, settings.AMAZON_AFFILIATE_TAG)
         }
         
         try:

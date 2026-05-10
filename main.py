@@ -49,8 +49,14 @@ def main():
         # 5. Generate Content
         html_content = generator.generate_full_post(topic, keyword, products_data)
         
+        # 5.5 Generate SEO Labels
+        seo_labels = generator.generate_seo_tags(topic, keyword)
+        category = row.get('Category', 'Review')
+        if category not in seo_labels:
+            seo_labels.append(category)
+        
         # 6. Publish to Blogger
-        published_url = publisher.publish_post(topic, html_content, labels=[row.get('Category', 'Review')])
+        published_url = publisher.publish_post(topic, html_content, labels=seo_labels)
         
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url)

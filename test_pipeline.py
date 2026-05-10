@@ -33,13 +33,31 @@ def main():
         urls = scraper.search_products(keyword)
         logger.info(f"Found URLs: {urls}")
         
-        if urls:
-            details = scraper.scrape_product_details(urls[0])
-            logger.info(f"First product details:\n{json.dumps(details, indent=2)}")
+        products_data = []
+        for url in urls[:2]: # Limit to 2 for testing
+            details = scraper.scrape_product_details(url)
+            if details:
+                products_data.append(details)
+                
+        logger.info(f"Scraped {len(products_data)} products.")
+        
+        if products_data:
+            # 4. Generate Content
+            from core.content_generator import ContentGenerator
+            logger.info("Initializing Content Generator...")
+            generator = ContentGenerator()
+            topic = row.get("Topic", "Top Gaming Mice")
+            html_content = generator.generate_full_post(topic, keyword, products_data)
+            
+            logger.info("Successfully generated blog post HTML!")
+            with open("test_output.html", "w", encoding="utf-8") as f:
+                f.write(html_content)
+            logger.info("Saved output to test_output.html")
+            
         else:
             logger.warning("No products found.")
     except Exception as e:
-        logger.error(f"Failed to scrape: {e}")
+        logger.error(f"Failed to scrape or generate: {e}")
 
 if __name__ == "__main__":
     main()
