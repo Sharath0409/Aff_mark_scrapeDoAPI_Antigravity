@@ -2,7 +2,8 @@ name: Autonomous Affiliate Publisher
 
 on:
   schedule:
-    - cron: '0 12 * * *' # Runs every day at 12:00 PM UTC
+    - cron: '30 18 * * *' # Runs at 12:00 AM IST
+    - cron: '30 6 * * *'  # Runs at 12:00 PM IST
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:

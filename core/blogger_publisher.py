@@ -42,12 +42,22 @@ class BloggerPublisher:
         
         try:
             posts = self.service.posts()
-            # isDraft=False publishes the post immediately
             request = posts.insert(blogId=self.blog_id, body=body, isDraft=False)
             response = request.execute()
             url = response.get('url')
-            logger.info(f"Post successfully published to Blogger: {url}")
-            return url
+            post_id = response.get('id')
+            logger.info(f"Post successfully published: {url} (ID: {post_id})")
+            return url, post_id
         except Exception as e:
             logger.error(f"Error publishing to Blogger: {e}")
             raise
+
+    @get_retry_decorator()
+    def get_post(self, post_id):
+        """Fetch a post by ID."""
+        return self.service.posts().get(blogId=self.blog_id, postId=post_id).execute()
+
+    @get_retry_decorator()
+    def update_post(self, post_id, post_body):
+        """Update an existing post."""
+        return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post_body).execute()

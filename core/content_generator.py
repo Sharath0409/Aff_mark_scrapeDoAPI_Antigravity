@@ -10,6 +10,7 @@ from templates.prompts import (
 )
 from utils.text_cleaner import sanitize_html
 import re
+from bs4 import BeautifulSoup
 
 logger = get_logger(__name__)
 
@@ -113,7 +114,7 @@ class ContentGenerator:
         comparison_html = f'<div class="comparison-table-wrapper">{self.generate_section(comparison_prompt, model="gpt-4o")}</div>'
         
         # 4. Detailed Reviews
-        rh_prompt = REVIEWS_HEADER_TEMPLATE.format(topic=topic)
+        rh_prompt = REVIEWS_HEADER_TEMPLATE
         reviews_header = self.generate_section(rh_prompt, model="gpt-4o-mini")
         reviews_html = f"<h2>{reviews_header}</h2>"
         for p in products:
@@ -150,9 +151,19 @@ class ContentGenerator:
         conc_prompt = CONCLUSION_TEMPLATE.format(topic=topic)
         conc_html = self.generate_section(conc_prompt, model='gpt-4o-mini')
         
-        # 7. Related Articles (New)
+        # 7. Related Articles (New) - Extract topics for auto-feeding
         rel_prompt = RELATED_ARTICLES_TEMPLATE.format(topic=topic, keyword=keyword)
         rel_html = self.generate_section(rel_prompt, model='gpt-4o-mini')
+        
+        # Extract plain text topics from <li> tags for the auto-feeding logic
+        try:
+            soup = BeautifulSoup(rel_html, 'html.parser')
+            related_topics = [li.get_text().strip() for li in soup.find_all('li')]
+            # Remove any trailing periods or extra quotes if AI added them
+            related_topics = [re.sub(r'["\.]', '', t).strip() for t in related_topics if t.strip()]
+        except Exception as e:
+            logger.error(f"Failed to parse related topics: {e}")
+            related_topics = []
         
         # 8. Footer
         footer_html = "\n<footer style='font-size: 0.9em; color: #666; border-top: 1px solid #eee; padding-top: 30px; margin-top: 60px;'><em>Disclaimer: This article contains affiliate links. If you click a link and make a purchase, we may earn a small commission at no extra cost to you.</em></footer>\n"
@@ -160,12 +171,11 @@ class ContentGenerator:
         # Assemble parts in requested order
         parts = [
             '<div class="blog-container">',
-            f'<h1 style="font-size: 2.5em; text-align: center; margin-bottom: 40px;">{topic}</h1>',
             style_block,
             intro_html,
             qs_html,
-            comparison_html,
             reviews_html,
+            comparison_html,
             faq_html,
             conc_html,
             rel_html,
@@ -173,4 +183,4 @@ class ContentGenerator:
             '</div>'
         ]
         
-        return "\n".join(parts)
+        return "\n".join(parts), related_topics

@@ -53,6 +53,7 @@ class SheetsManager:
             topic_idx = headers.index("Topic")
             keyword_idx = headers.index("Keyword")
             category_idx = headers.index("Category")
+            parent_id_idx = headers.index("Parent Post ID") if "Parent Post ID" in headers else -1
         except ValueError as e:
             logger.error(f"Missing required columns in Google Sheet: {e}")
             return None
@@ -65,7 +66,8 @@ class SheetsManager:
                     "row_index": idx,
                     "Topic": row[topic_idx] if len(row) > topic_idx else "",
                     "Keyword": row[keyword_idx] if len(row) > keyword_idx else "",
-                    "Category": row[category_idx] if len(row) > category_idx else ""
+                    "Category": row[category_idx] if len(row) > category_idx else "",
+                    "Parent Post ID": row[parent_id_idx] if parent_id_idx != -1 and len(row) > parent_id_idx else ""
                 }
         return None
         
@@ -84,7 +86,7 @@ class SheetsManager:
         logger.info(f"Total pending rows remaining: {count}")
         return count
         
-    def update_row_status(self, row_index, status, url="", error=""):
+    def update_row_status(self, row_index, status, url="", error="", post_id=""):
         """Update the row with Success/Failed status, Date, URL, and Error Log."""
         try:
             # We need to update columns dynamically
@@ -120,6 +122,12 @@ class SheetsManager:
                     "values": [[url]]
                 })
                 
+            if post_id and "Post ID" in headers:
+                updates.append({
+                    "range": f"{self.sheet_name}!{col_letter(headers.index('Post ID'))}{row_index}",
+                    "values": [[post_id]]
+                })
+                
             if error and "Error Log" in headers:
                 updates.append({
                     "range": f"{self.sheet_name}!{col_letter(headers.index('Error Log'))}{row_index}",
@@ -137,3 +145,40 @@ class SheetsManager:
             logger.info(f"Successfully updated row {row_index} to status: {status}")
         except Exception as e:
             logger.error(f"Failed to update row {row_index}: {e}")
+
+    def add_related_topics(self, topics, parent_post_id, category="Review"):
+        """Append new topics to the sheet with status 'Pending'."""
+        try:
+            values = self.get_all_rows()
+            if not values:
+                return
+            headers = values[0]
+            
+            new_rows = []
+            for topic in topics:
+                # Prepare a row matching headers length
+                row_data = [""] * len(headers)
+                if "Topic" in headers:
+                    row_data[headers.index("Topic")] = topic
+                if "Keyword" in headers:
+                    # Use the topic as the keyword for now
+                    row_data[headers.index("Keyword")] = topic
+                if "Category" in headers:
+                    row_data[headers.index("Category")] = category
+                if "Status" in headers:
+                    row_data[headers.index("Status")] = "Pending"
+                if "Parent Post ID" in headers:
+                    row_data[headers.index("Parent Post ID")] = parent_post_id
+                new_rows.append(row_data)
+                
+            if new_rows:
+                self.sheet.values().append(
+                    spreadsheetId=self.sheet_id,
+                    range=self.sheet_name,
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": new_rows}
+                ).execute()
+                logger.info(f"Successfully added {len(new_rows)} related topics to the sheet.")
+        except Exception as e:
+            logger.error(f"Failed to append related topics: {e}")

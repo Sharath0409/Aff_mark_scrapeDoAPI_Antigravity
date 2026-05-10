@@ -6,7 +6,8 @@ Avoid robotic transitions and 'corporate' AI language.
 Always output pure HTML5 without Markdown backticks."""
 
 INTRO_TEMPLATE = """
-Write a conversational, SEO-optimized intro for '{topic}'. 
+Start with a centered <h1> title for '{topic}'.
+Then write a conversational, SEO-optimized intro. 
 Hook the reader immediately—don't just define the topic, tell them WHY they need to care. 
 Include the keyword '{keyword}' naturally.
 Make it sound like a friend giving advice, not an encyclopedia entry.

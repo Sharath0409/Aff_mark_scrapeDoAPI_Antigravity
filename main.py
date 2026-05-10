@@ -31,6 +31,10 @@ def main():
             
         # 3. Fetch next pending row
         row = sheets.get_pending_row()
+        if not row:
+            logger.info("No pending rows found. Pipeline finished.")
+            return
+
         topic = row['Topic']
         keyword = row['Keyword']
         row_index = row['row_index']
@@ -47,7 +51,7 @@ def main():
                 products_data.append(data)
                 
         # 5. Generate Content
-        html_content = generator.generate_full_post(topic, keyword, products_data)
+        html_content, related_topics = generator.generate_full_post(topic, keyword, products_data)
         
         # 5.5 Generate SEO Labels
         seo_labels = generator.generate_seo_tags(topic, keyword)
@@ -58,14 +62,51 @@ def main():
         # 6. Publish to Blogger
         # Sanitize title to help Blogger generate a cleaner slug
         clean_title = topic.strip()
-        published_url = publisher.publish_post(clean_title, html_content, labels=seo_labels)
+        published_url, current_post_id = publisher.publish_post(clean_title, html_content, labels=seo_labels)
         
         # 7. Update Google Sheets
-        sheets.update_row_status(row_index, "Success", url=published_url)
+        sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
+        
+        # 7.5 Add related topics to sheet for future runs (Auto-feeding)
+        if related_topics:
+            sheets.add_related_topics(related_topics, parent_post_id=current_post_id, category=category)
+            
+        # 7.6 Link Back (Update Parent Post with the new URL)
+        parent_post_id = row.get("Parent Post ID")
+        if parent_post_id:
+            logger.info(f"Attempting to link back to parent post: {parent_post_id}")
+            try:
+                parent_post = publisher.get_post(parent_post_id)
+                parent_content = parent_post['content']
+                # Search for the exact topic text in the related reading list and wrap it in a link
+                import re
+                # We escape the topic to avoid regex issues
+                escaped_topic = re.escape(topic)
+                # Look for the topic inside a list item
+                pattern = f'<li>{escaped_topic}</li>'
+                replacement = f'<li><a href="{published_url}">{topic}</a></li>'
+                
+                if re.search(pattern, parent_content, re.IGNORECASE):
+                    new_parent_content = re.sub(pattern, replacement, parent_content, flags=re.IGNORECASE)
+                    parent_post['content'] = new_parent_content
+                    publisher.update_post(parent_post_id, parent_post)
+                    logger.info("Successfully updated parent post with real internal link.")
+                else:
+                    # Fallback: just search for the text if the <li> tag varies
+                    if topic in parent_content:
+                         new_parent_content = parent_content.replace(topic, f'<a href="{published_url}">{topic}</a>')
+                         parent_post['content'] = new_parent_content
+                         publisher.update_post(parent_post_id, parent_post)
+                         logger.info("Successfully updated parent post (fallback search).")
+                    else:
+                        logger.warning(f"Could not find topic text '{topic}' in parent post to update link.")
+            except Exception as e:
+                logger.error(f"Failed to update parent post link: {e}")
+
         logger.info(f"Pipeline finished successfully for topic: {topic}")
         
         # 8. Send Success Report
-        notifier.send_report("Success", topic, f"Post published at: {published_url}")
+        notifier.send_report("Success", topic, f"Post published at: {published_url}\nAuto-added {len(related_topics)} topics to queue.\nLink-back to parent: {'Done' if parent_post_id else 'N/A'}")
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
