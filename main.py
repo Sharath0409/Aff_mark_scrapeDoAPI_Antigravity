@@ -56,7 +56,9 @@ def main():
             seo_labels.append(category)
         
         # 6. Publish to Blogger
-        published_url = publisher.publish_post(topic, html_content, labels=seo_labels)
+        # Sanitize title to help Blogger generate a cleaner slug
+        clean_title = topic.strip()
+        published_url = publisher.publish_post(clean_title, html_content, labels=seo_labels)
         
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url)

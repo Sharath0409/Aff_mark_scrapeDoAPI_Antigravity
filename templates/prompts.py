@@ -1,39 +1,51 @@
-SYSTEM_PROMPT = """You are an expert product reviewer and SEO specialist.
-Write in a conversational, authoritative, and engaging tone. 
-Avoid overused AI buzzwords (e.g., 'In conclusion', 'Delve into', 'Tapestry', 'Testament').
-Always output pure HTML5 format without Markdown wrappers unless specified."""
+SYSTEM_PROMPT = """You are a seasoned gadget reviewer and tech enthusiast. 
+Write in a relatable, human, and slightly opinionated tone. 
+Use personal pronouns like 'I' and 'you'. 
+Break up long paragraphs into punchy, 2-3 sentence chunks. 
+Avoid robotic transitions and 'corporate' AI language.
+Always output pure HTML5 without Markdown backticks."""
 
 INTRO_TEMPLATE = """
-Write an engaging SEO-optimized introduction for an affiliate blog post about '{topic}'.
-Include the target keyword: '{keyword}'.
-Structure it with an engaging hook, the problem it solves, and what the reader will find in the article.
+Write a conversational, SEO-optimized intro for '{topic}'. 
+Hook the reader immediately—don't just define the topic, tell them WHY they need to care. 
+Include the keyword '{keyword}' naturally.
+Make it sound like a friend giving advice, not an encyclopedia entry.
 """
 
 REVIEW_TEMPLATE = """
-Write a compelling product review for the following Amazon product:
+Create a 'Product Card' for this Amazon item:
 Title: {title}
 Price: {price}
 Rating: {rating} ({review_count} reviews)
 Features: {features}
 
-Include:
-- A brief description.
-- A bulleted list of 3 Pros and 2 Cons.
-- Do NOT include any placeholder URLs. I will inject them later.
+Instructions:
+1. Write a 3-sentence 'Verdict'—wrap it in a <div class="verdict-box">.
+2. Write a detailed 100-word product description.
+3. Create a <ul> list for 'Key Specifications'.
+4. Create a <div class="pros-cons-grid">.
+5. Inside, use a <div class="pros-list"><h4>Pros</h4><ul>...</ul></div> and a <div class="cons-list"><h4>Cons</h4><ul>...</ul></div>.
+6. Use professional, authoritative language.
 """
 
 COMPARISON_TEMPLATE = """
-Based on the products reviewed above, generate a comparative HTML table summarizing their key features and prices.
-Ensure the final row of the table for each product contains a "Check Price" button linking to the product URL provided.
-Use `<table class="comparison-table">`.
+Generate a detailed TRANSPOSED HTML comparison table. 
+- Identify 6-8 of the most important technical specifications/features specifically relevant to this product category.
+- The first column must be 'Feature'.
+- Each subsequent column must be one of the products.
+- Always include 'Price' and 'Verdict' rows.
+- The last row must be 'Action' with a 'Check Price' button for each product.
+- Use <table class="comparison-table">.
 """
 
 FAQ_TEMPLATE = """
-Generate a FAQ section for the topic '{topic}' with 3 common questions and answers.
-Also, output the corresponding JSON-LD FAQ schema.
+Generate 3 'Real-World' FAQs for '{topic}'. 
+Answer them briefly and helpfully. Include JSON-LD schema.
 """
 
 SEO_TAGS_TEMPLATE = """
-Generate a comma-separated list of 5 to 8 highly relevant, SEO-optimized keywords and tags for a blog post about '{topic}' (main keyword: '{keyword}').
-Return ONLY the comma-separated string, with no quotes, bullet points, or extra text.
+Generate a comma-separated list of 5-8 SEO tags for '{topic}'.
+CRITICAL: Do NOT include any years (e.g., no '2023', '2024', etc.).
+Keep them evergreen and keyword-focused.
+Return ONLY the tags, no quotes.
 """

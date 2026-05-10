@@ -23,7 +23,7 @@ class AmazonScraper:
         params = {
             "token": self.scrape_do_token,
             "url": target_url,
-            "geo": "us"
+            "geoCode": "us"
         }
         
         logger.info(f"Fetching via Scrape.do: {target_url}")
@@ -87,10 +87,33 @@ class AmazonScraper:
             "rating": "No rating",
             "review_count": "0",
             "features": "No features found",
+            "image_url": "",
             "url": inject_affiliate_tag(url, settings.AMAZON_AFFILIATE_TAG)
         }
         
         try:
+            # Extract High-Resolution Image
+            img_tag = soup.find('img', id='landingImage') or soup.find('img', id='imgBlkFront')
+            if img_tag:
+                # Try to get high-res source
+                hi_res = img_tag.get('data-old-hires') or img_tag.get('data-a-dynamic-image')
+                if hi_res and hi_res.startswith('{'):
+                    try:
+                        import json
+                        images = json.loads(hi_res)
+                        # Get the URL with the largest dimensions
+                        details['image_url'] = max(images.items(), key=lambda x: x[1][0])[0]
+                    except:
+                        details['image_url'] = img_tag.get('src', '')
+                else:
+                    details['image_url'] = hi_res or img_tag.get('src', '')
+            
+            # Extract Delivery Location (to ensure it's not India)
+            delivery_tag = soup.find('span', id='glow-ingress-line2')
+            if delivery_tag and "India" in delivery_tag.text:
+                logger.warning(f"Product shows delivery to India, skipping: {url}")
+                return None
+            
             # Extract Title
             title_tag = soup.find('span', id='productTitle')
             if title_tag:
