@@ -4,6 +4,7 @@ from config import settings
 from utils.retry import get_retry_decorator
 from templates.prompts import SYSTEM_PROMPT, INTRO_TEMPLATE, REVIEW_TEMPLATE, COMPARISON_TEMPLATE, FAQ_TEMPLATE, SEO_TAGS_TEMPLATE
 from utils.text_cleaner import sanitize_html
+import re
 
 logger = get_logger(__name__)
 
@@ -45,7 +46,6 @@ class ContentGenerator:
         tags = [tag.strip() for tag in result.replace('"', '').split(',') if tag.strip()]
         
         # Sanitize tags and enforce Blogger's strict 200 character limit for ALL labels combined
-        import re
         safe_tags = []
         total_length = 0
         for tag in tags:
@@ -138,16 +138,18 @@ class ContentGenerator:
         # 5. Footer
         footer_html = "\n<footer style='font-size: 0.9em; color: #666; border-top: 1px solid #eee; padding-top: 30px; margin-top: 60px;'><em>Disclaimer: This article contains affiliate links. If you click a link and make a purchase, we may earn a small commission at no extra cost to you.</em></footer>\n"
         
-        full_html = f"""
-        <div class="blog-container">
-            <h1 style="font-size: 2.5em; text-align: center; margin-bottom: 40px;">{topic}</h1>
-            {style_block}
-            {intro_html}
-            {reviews_html}
-            <h2 style="margin-top: 80px; text-align: center;">At-A-Glance Comparison</h2>
-            {comparison_html}
-            {faq_html}
-            {footer_html}
-        </div>
-        """
-        return full_html
+        # Assemble parts to avoid f-string brace confusion with CSS
+        parts = [
+            '<div class="blog-container">',
+            f'<h1 style="font-size: 2.5em; text-align: center; margin-bottom: 40px;">{topic}</h1>',
+            style_block,
+            intro_html,
+            reviews_html,
+            '<h2 style="margin-top: 80px; text-align: center;">At-A-Glance Comparison</h2>',
+            comparison_html,
+            faq_html,
+            footer_html,
+            '</div>'
+        ]
+        
+        return "\n".join(parts)

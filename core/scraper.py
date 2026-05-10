@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 from utils.affiliate import inject_affiliate_tag
 import time
 import random
+import json
 
 logger = get_logger(__name__)
 
@@ -99,7 +100,6 @@ class AmazonScraper:
                 hi_res = img_tag.get('data-old-hires') or img_tag.get('data-a-dynamic-image')
                 if hi_res and hi_res.startswith('{'):
                     try:
-                        import json
                         images = json.loads(hi_res)
                         # Get the URL with the largest dimensions
                         details['image_url'] = max(images.items(), key=lambda x: x[1][0])[0]
