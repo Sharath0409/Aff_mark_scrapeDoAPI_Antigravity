@@ -61,3 +61,31 @@ class BloggerPublisher:
     def update_post(self, post_id, post_body):
         """Update an existing post."""
         return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post_body).execute()
+
+    @get_retry_decorator()
+    def list_all_posts(self, max_results=500):
+        """Retrieve existing posts for internal link matching."""
+        logger.info(f"Listing up to {max_results} existing posts...")
+        posts_list = []
+        page_token = None
+        
+        while len(posts_list) < max_results:
+            request = self.service.posts().list(
+                blogId=self.blog_id,
+                pageToken=page_token,
+                maxResults=min(max_results - len(posts_list), 500),
+                fetchBodies=False # Only need metadata
+            )
+            response = request.execute()
+            
+            items = response.get('items', [])
+            if not items:
+                break
+                
+            posts_list.extend(items)
+            page_token = response.get('nextPageToken')
+            if not page_token:
+                break
+                
+        logger.info(f"Successfully retrieved {len(posts_list)} posts.")
+        return posts_list

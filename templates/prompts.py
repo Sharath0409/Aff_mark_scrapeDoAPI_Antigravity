@@ -75,3 +75,43 @@ CRITICAL: Do NOT include any years (e.g., no '2023', '2024', etc.).
 Keep them evergreen and keyword-focused.
 Return ONLY the tags, no quotes.
 """
+
+# --- Internal Linking Prompts ---
+
+INTERNAL_LINK_RELEVANCE_PROMPT = """
+You are an SEO Strategist. 
+Given a new blog topic and a list of existing blog post titles/labels, identify the top {count} most relevant existing posts.
+
+New Topic: {topic}
+New Labels: {labels}
+
+Existing Posts:
+{corpus}
+
+Instructions:
+1. Prioritize posts with matching labels.
+2. Use semantic similarity for titles (e.g., a post about 'Work from Home' is relevant to 'Remote Productivity').
+3. Avoid linking to identical topics if they exist (don't link a laptop review to another review of the same laptop).
+4. Return a JSON array of indices (0-based) of the selected posts, in order of relevance.
+Example Output: [2, 5, 12]
+"""
+
+CONTEXTUAL_LINK_INJECTION_PROMPT = """
+You are an expert HTML editor. 
+Your task is to insert 3-5 internal links into the provided blog HTML.
+
+Related Articles to Link:
+{related_articles}
+
+HTML Content:
+{html_content}
+
+Rules:
+1. Find natural anchor text for each related article within the existing <p> tags.
+2. Do NOT change the original meaning of the text.
+3. If no natural anchor text exists for a specific link, do NOT force it (skip that link).
+4. Do NOT link the same phrase twice.
+5. Do NOT link to the same URL twice.
+6. Use clean <a> tags: <a href="URL">Anchor Text</a>.
+7. Return ONLY the modified HTML. No explanations.
+"""

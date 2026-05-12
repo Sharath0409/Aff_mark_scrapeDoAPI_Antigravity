@@ -6,6 +6,7 @@ from core.scraper import AmazonScraper
 from core.content_generator import ContentGenerator
 from core.blogger_publisher import BloggerPublisher
 from core.notifier import EmailNotifier
+from core.internal_linker import InternalLinkManager
 
 logger = get_logger("main")
 
@@ -18,6 +19,7 @@ def main():
     generator = ContentGenerator()
     publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
     notifier = EmailNotifier()
+    link_manager = InternalLinkManager(publisher)
     
     try:
         # 2. Check pending count & warn if necessary
@@ -38,6 +40,9 @@ def main():
         topic = row['Topic']
         keyword = row['Keyword']
         row_index = row['row_index']
+        
+        # 3.5 Refresh Post Corpus (for internal linking)
+        link_manager.refresh_corpus()
         
         # 4. Scrape Products (with 3-attempt retry logic)
         import time
@@ -70,6 +75,14 @@ def main():
         category = row.get('Category', 'Review')
         if category not in seo_labels:
             seo_labels.append(category)
+        
+        # 5.6 Internal Linking Logic
+        related_posts = link_manager.get_related_articles(topic, seo_labels, count=3)
+        if related_posts:
+            # 6.1 Contextual Injection (AI-powered anchor text matching)
+            html_content = link_manager.inject_internal_links(html_content, related_posts)
+            # 6.2 Append Related Articles Footer
+            html_content = link_manager.add_related_section(html_content, related_posts)
         
         # 6. Publish to Blogger
         # Sanitize title to help Blogger generate a cleaner slug
