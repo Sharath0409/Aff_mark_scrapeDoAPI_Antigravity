@@ -1,4 +1,5 @@
 import sys
+import logging
 from config.logger import get_logger
 from config import settings
 from core.sheets_manager import SheetsManager
@@ -8,11 +9,13 @@ from core.blogger_publisher import BloggerPublisher
 from core.notifier import EmailNotifier
 from core.internal_linker import InternalLinkManager
 from utils.text_cleaner import normalize_topic
+from utils.image_optimizer import ImageOptimizer
+from utils.image_uploader import CloudinaryUploader
 
 logger = get_logger("main")
 
 def main():
-    logger.info("Starting Autonomous Affiliate Publisher Pipeline with Duplicate Detection")
+    logger.info("Starting Autonomous Affiliate Publisher Pipeline with Image Optimization")
     
     # 1. Initialize Modules
     sheets = SheetsManager(settings.GOOGLE_SHEET_ID, settings.GCP_SERVICE_ACCOUNT)
@@ -21,6 +24,14 @@ def main():
     publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
     notifier = EmailNotifier()
     link_manager = InternalLinkManager(publisher)
+    
+    # Setup Image Optimization
+    optimizer = ImageOptimizer()
+    uploader = CloudinaryUploader(
+        cloud_name=settings.CLOUDINARY_NAME,
+        api_key=settings.CLOUDINARY_API_KEY,
+        api_secret=settings.CLOUDINARY_API_SECRET
+    )
     
     try:
         # 2. Check pending count & warn if necessary
@@ -86,6 +97,18 @@ def main():
         for url in product_urls[:3]:  # Top 3 products
             data = scraper.scrape_product_details(url)
             if data:
+                # --- NEW IMAGE OPTIMIZATION STEP ---
+                raw_image_url = data.get('image_url')
+                if raw_image_url:
+                    logger.info(f"Optimizing product image for: {data.get('title')}")
+                    local_webp = optimizer.optimize_from_url(raw_image_url, data.get('title', 'Product'))
+                    if local_webp:
+                        # Upload to CDN
+                        optimized_url = uploader.upload(local_webp)
+                        if optimized_url:
+                            logger.info(f"Using optimized image URL: {optimized_url}")
+                            data['image_url'] = optimized_url # Swap with optimized version
+                # -----------------------------------
                 products_data.append(data)
                 
         # 5. Generate Content
@@ -113,14 +136,17 @@ def main():
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
             
+        # Cleanup temp images after post is published
+        optimizer.cleanup()
+        
         logger.info(f"Pipeline finished successfully for topic: {topic}")
         
         # 8. Send Success Report
-        notifier.send_report("Success", topic, f"Post published at: {published_url}")
+        notifier.send_report("Success", topic, f"Post published at: {published_url}\nImages Optimized: {len(products_data)}")
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
-        # 9. Send Fatal Failure Report (after all retries failed)
+        # 9. Send Fatal Failure Report
         try:
             notifier.send_report("Failure", topic if 'topic' in locals() else "Unknown", str(e))
         except:

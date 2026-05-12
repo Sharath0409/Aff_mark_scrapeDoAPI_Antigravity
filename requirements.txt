@@ -8,3 +8,4 @@ pandas
 jinja2
 python-dotenv
 tenacity
+Pillow
