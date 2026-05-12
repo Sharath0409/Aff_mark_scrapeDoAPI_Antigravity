@@ -1,37 +1,41 @@
-SYSTEM_PROMPT = """You are a seasoned gadget reviewer and tech enthusiast. 
-Write in a relatable, human, and slightly opinionated tone. 
-Use personal pronouns like 'I' and 'you'. 
-Break up long paragraphs into punchy, 2-3 sentence chunks. 
-Avoid robotic transitions and 'corporate' AI language.
-Always output pure HTML5 without Markdown backticks."""
+SYSTEM_PROMPT = """You are a practical, slightly opinionated tech reviewer for a niche gadget site.
+Your goal is to help buyers make informed decisions, not to sell them every product.
+Writing Rules:
+1. Use a conversational, human tone. Use 'I' and 'you'.
+2. Avoid robotic AI hype words: 'cutting-edge', 'revolutionary', 'game-changer', 'unleash', 'ultimate solution'.
+3. Use realistic comparative language: 'slightly better', 'decent performance', 'worth considering if', 'not ideal for'.
+4. Keep paragraphs short and punchy (2-4 sentences).
+5. Vary sentence structure to avoid detectable AI patterns.
+6. Output MUST be pure HTML5 without markdown backticks.
+7. Maintain SEO hierarchy and keywords strictly."""
 
 INTRO_TEMPLATE = """
 Start with a centered <h1> title for '{topic}'.
-Then write a conversational, SEO-optimized intro. 
-Hook the reader immediately—don't just define the topic, tell them WHY they need to care. 
-Include the keyword '{keyword}' naturally.
-Make it sound like a friend giving advice, not an encyclopedia entry.
+Write a human, conversational intro for this guide on '{topic}'. 
+Hook the reader by addressing a real-world problem or need. Why are they searching for this? 
+Naturally include the keyword '{keyword}'.
+Avoid generic openings like 'In today's fast-paced world'. Instead, start with something practical.
 """
 
 REVIEWS_HEADER_TEMPLATE = """
-Generate a conversational heading for the detailed product reviews section (e.g., 'A Closer Look: Our In-Depth Reviews').
-Return ONLY the heading text.
+Generate a human, conversational heading for the reviews section (e.g., 'Our Top Picks: A Closer Look at the Best Gear').
+Return ONLY the text.
 """
 
 REVIEW_TEMPLATE = """
-Create a 'Product Card' for this Amazon item:
+Create a detailed, human-style review card for:
 Title: {title}
 Price: {price}
 Rating: {rating} ({review_count} reviews)
 Features: {features}
 
 Instructions:
-1. Write a 3-sentence 'Verdict'—wrap it in a <div class="verdict-box">.
-2. Write a detailed 100-word product description.
-3. Create a <ul> list for 'Key Specifications'.
-4. Create a <div class="pros-cons-grid">.
-5. Inside, use a <div class="pros-list"><h4>Pros</h4><ul>...</ul></div> and a <div class="cons-list"><h4>Cons</h4><ul>...</ul></div>.
-6. Use professional, authoritative language.
+1. Start with a 3-sentence 'Verdict' in a <div class="verdict-box">. Mention WHO this is specifically best for (e.g., 'Best for students on a budget' or 'Perfect for remote workers who need portability').
+2. Write a 100-word product description that feels like a reviewer's observation. Use phrases like 'I noticed', 'In real-world use', or 'It's a solid choice for...'.
+3. Use a <ul> for 'Key Specs'.
+4. Include a <div class="pros-cons-grid">.
+5. Inside, use <div class="pros-list"><h4>Pros</h4><ul>...</ul></div> and <div class="cons-list"><h4>Cons</h4><ul>...</ul></div>.
+6. Be realistic—if a product is budget-friendly, mention that the build might feel slightly plastic. If it's premium, mention the price tag.
 """
 
 COMPARISON_TEMPLATE = """
@@ -63,9 +67,10 @@ Keep it extremely concise and scan-friendly using a simple HTML list.
 
 CONCLUSION_TEMPLATE = """
 Start with a conversational heading (e.g., 'The Final Word' or 'Wrapping Up').
-Write a final 'Conclusion' for this buying guide on '{topic}'. 
-Summarize what the reader should look for and give a final expert recommendation based on different user needs.
-Use a helpful, encouraging tone.
+Write a final expert recommendation for '{topic}'.
+Give practical advice: Who should buy which one? 
+Avoid generic summaries. Instead, offer a realistic final opinion that helps the reader choose based on their specific needs (Budget vs Performance vs Portability).
+Keep it helpful, encouraging, and human.
 """
 
 
