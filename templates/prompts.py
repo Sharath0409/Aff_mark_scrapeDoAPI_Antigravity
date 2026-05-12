@@ -68,12 +68,6 @@ Summarize what the reader should look for and give a final expert recommendation
 Use a helpful, encouraging tone.
 """
 
-RELATED_ARTICLES_TEMPLATE = """
-Start with a conversational heading (e.g., 'More for Your Setup' or 'You Might Also Like').
-Generate a 'Related Reading' section with 3 internal-style link titles related to '{topic}'.
-Do NOT include actual links, just the titles wrapped in <ul><li> tags.
-Example: 'How to Choose the Perfect {keyword} for Your Setup'
-"""
 
 SEO_TAGS_TEMPLATE = """
 Generate a comma-separated list of 5-8 SEO tags for '{topic}'.

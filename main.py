@@ -39,10 +39,22 @@ def main():
         keyword = row['Keyword']
         row_index = row['row_index']
         
-        # 4. Scrape Products
-        product_urls = scraper.search_products(keyword)
+        # 4. Scrape Products (with 3-attempt retry logic)
+        import time
+        max_retries = 3
+        product_urls = []
+        
+        for attempt in range(1, max_retries + 1):
+            logger.info(f"Searching Amazon (Attempt {attempt}/{max_retries}) for: {keyword}")
+            product_urls = scraper.search_products(keyword)
+            if product_urls:
+                break
+            if attempt < max_retries:
+                logger.warning(f"No products found on attempt {attempt}. Retrying in 10 seconds...")
+                time.sleep(10)
+        
         if not product_urls:
-            raise ValueError("No products found for keyword.")
+            raise ValueError(f"No products found for keyword '{keyword}' after {max_retries} attempts.")
             
         products_data = []
         for url in product_urls[:3]:  # Top 3 products
@@ -51,7 +63,7 @@ def main():
                 products_data.append(data)
                 
         # 5. Generate Content
-        html_content, related_topics = generator.generate_full_post(topic, keyword, products_data)
+        html_content = generator.generate_full_post(topic, keyword, products_data)
         
         # 5.5 Generate SEO Labels
         seo_labels = generator.generate_seo_tags(topic, keyword)
@@ -66,47 +78,11 @@ def main():
         
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
-        
-        # 7.5 Add related topics to sheet for future runs (Auto-feeding)
-        if related_topics:
-            sheets.add_related_topics(related_topics, parent_post_id=current_post_id, category=category)
             
-        # 7.6 Link Back (Update Parent Post with the new URL)
-        parent_post_id = row.get("Parent Post ID")
-        if parent_post_id:
-            logger.info(f"Attempting to link back to parent post: {parent_post_id}")
-            try:
-                parent_post = publisher.get_post(parent_post_id)
-                parent_content = parent_post['content']
-                # Search for the exact topic text in the related reading list and wrap it in a link
-                import re
-                # We escape the topic to avoid regex issues
-                escaped_topic = re.escape(topic)
-                # Look for the topic inside a list item
-                pattern = f'<li>{escaped_topic}</li>'
-                replacement = f'<li><a href="{published_url}">{topic}</a></li>'
-                
-                if re.search(pattern, parent_content, re.IGNORECASE):
-                    new_parent_content = re.sub(pattern, replacement, parent_content, flags=re.IGNORECASE)
-                    parent_post['content'] = new_parent_content
-                    publisher.update_post(parent_post_id, parent_post)
-                    logger.info("Successfully updated parent post with real internal link.")
-                else:
-                    # Fallback: just search for the text if the <li> tag varies
-                    if topic in parent_content:
-                         new_parent_content = parent_content.replace(topic, f'<a href="{published_url}">{topic}</a>')
-                         parent_post['content'] = new_parent_content
-                         publisher.update_post(parent_post_id, parent_post)
-                         logger.info("Successfully updated parent post (fallback search).")
-                    else:
-                        logger.warning(f"Could not find topic text '{topic}' in parent post to update link.")
-            except Exception as e:
-                logger.error(f"Failed to update parent post link: {e}")
-
         logger.info(f"Pipeline finished successfully for topic: {topic}")
         
         # 8. Send Success Report
-        notifier.send_report("Success", topic, f"Post published at: {published_url}\nAuto-added {len(related_topics)} topics to queue.\nLink-back to parent: {'Done' if parent_post_id else 'N/A'}")
+        notifier.send_report("Success", topic, f"Post published at: {published_url}")
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)

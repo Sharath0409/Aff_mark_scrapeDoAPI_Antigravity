@@ -5,7 +5,7 @@ from utils.retry import get_retry_decorator
 from templates.prompts import (
     SYSTEM_PROMPT, INTRO_TEMPLATE, REVIEW_TEMPLATE, 
     COMPARISON_TEMPLATE, FAQ_TEMPLATE, SEO_TAGS_TEMPLATE,
-    QUICK_SUMMARY_TEMPLATE, CONCLUSION_TEMPLATE, RELATED_ARTICLES_TEMPLATE,
+    QUICK_SUMMARY_TEMPLATE, CONCLUSION_TEMPLATE,
     REVIEWS_HEADER_TEMPLATE
 )
 from utils.text_cleaner import sanitize_html
@@ -148,33 +148,11 @@ class ContentGenerator:
         faq_prompt = FAQ_TEMPLATE.format(topic=topic)
         faq_html = self.generate_section(faq_prompt, model='gpt-4o-mini')
         
-        # 6. Conclusion (New)
+        # 6. Conclusion
         conc_prompt = CONCLUSION_TEMPLATE.format(topic=topic)
         conc_html = self.generate_section(conc_prompt, model='gpt-4o-mini')
         
-        # 7. Related Articles (New) - Extract topics for auto-feeding
-        rel_prompt = RELATED_ARTICLES_TEMPLATE.format(topic=topic, keyword=keyword)
-        rel_html = self.generate_section(rel_prompt, model='gpt-4o-mini')
-        
-        # Extract plain text topics from <li> tags for the auto-feeding logic
-        try:
-            soup = BeautifulSoup(rel_html, 'html.parser')
-            related_topics = [li.get_text().strip() for li in soup.find_all('li')]
-            # Clean up punctuations, leading numbers (1. ), and extra quotes
-            clean_topics = []
-            for t in related_topics:
-                # Remove leading numbers/dots (e.g., "1. Topic" -> "Topic")
-                t = re.sub(r'^\d+[\.\)\s\-]+', '', t).strip()
-                # Remove wrapping quotes and trailing periods
-                t = t.strip('"').strip("'").rstrip('.')
-                if t:
-                    clean_topics.append(t)
-            related_topics = clean_topics
-        except Exception as e:
-            logger.error(f"Failed to parse related topics: {e}")
-            related_topics = []
-        
-        # 8. Footer
+        # 7. Footer
         footer_html = "\n<footer style='font-size: 0.9em; color: #666; border-top: 1px solid #eee; padding-top: 30px; margin-top: 60px;'><em>Disclaimer: This article contains affiliate links. If you click a link and make a purchase, we may earn a small commission at no extra cost to you.</em></footer>\n"
         
         # Assemble parts in requested order
@@ -187,9 +165,8 @@ class ContentGenerator:
             comparison_html,
             faq_html,
             conc_html,
-            rel_html,
             footer_html,
             '</div>'
         ]
         
-        return "\n".join(parts), related_topics
+        return "\n".join(parts)
