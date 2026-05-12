@@ -182,3 +182,28 @@ class SheetsManager:
                 logger.info(f"Successfully added {len(new_rows)} related topics to the sheet.")
         except Exception as e:
             logger.error(f"Failed to append related topics: {e}")
+
+    def get_processed_topics(self):
+        """Fetch all topics that have already been processed or published."""
+        try:
+            values = self.get_all_rows()
+            if not values or len(values) < 2:
+                return []
+            
+            headers = values[0]
+            if "Topic" not in headers or "Status" not in headers:
+                return []
+                
+            topic_idx = headers.index("Topic")
+            status_idx = headers.index("Status")
+            
+            processed = []
+            for row in values[1:]:
+                status = row[status_idx].lower() if len(row) > status_idx else ""
+                if status in ['success', 'published', 'skipped - duplicate topic']:
+                    if len(row) > topic_idx:
+                        processed.append(row[topic_idx])
+            return processed
+        except Exception as e:
+            logger.error(f"Error getting processed topics from sheet: {e}")
+            return []

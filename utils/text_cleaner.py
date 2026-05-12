@@ -10,3 +10,15 @@ def extract_json(text):
 def sanitize_html(html_str):
     # Basic cleanup if necessary
     return html_str.strip()
+
+def normalize_topic(topic):
+    """Normalize topic for duplicate detection (lowercase, trim, no special chars)."""
+    if not topic:
+        return ""
+    # Convert to lowercase
+    topic = topic.lower()
+    # Remove special characters except spaces
+    topic = re.sub(r'[^a-z0-9\s]', '', topic)
+    # Collapse multiple spaces and trim
+    topic = " ".join(topic.split())
+    return topic

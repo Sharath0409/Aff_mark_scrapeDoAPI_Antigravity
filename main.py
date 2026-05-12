@@ -7,11 +7,12 @@ from core.content_generator import ContentGenerator
 from core.blogger_publisher import BloggerPublisher
 from core.notifier import EmailNotifier
 from core.internal_linker import InternalLinkManager
+from utils.text_cleaner import normalize_topic
 
 logger = get_logger("main")
 
 def main():
-    logger.info("Starting Autonomous Affiliate Publisher Pipeline")
+    logger.info("Starting Autonomous Affiliate Publisher Pipeline with Duplicate Detection")
     
     # 1. Initialize Modules
     sheets = SheetsManager(settings.GOOGLE_SHEET_ID, settings.GCP_SERVICE_ACCOUNT)
@@ -41,8 +42,28 @@ def main():
         keyword = row['Keyword']
         row_index = row['row_index']
         
-        # 3.5 Refresh Post Corpus (for internal linking)
+        # 3.5 Refresh Post Corpus (for internal linking AND duplicate detection)
         link_manager.refresh_corpus()
+        
+        # 3.6 Duplicate Detection Logic
+        logger.info(f"Performing duplicate check for: {topic}")
+        normalized_current = normalize_topic(topic)
+        
+        # Gather all historical topics (Sheet + Blogger)
+        historical_sheet = sheets.get_processed_topics()
+        historical_blogger = [p['title'] for p in link_manager.corpus]
+        all_history = historical_sheet + historical_blogger
+        
+        is_duplicate = False
+        for hist_title in all_history:
+            if normalize_topic(hist_title) == normalized_current:
+                is_duplicate = True
+                break
+        
+        if is_duplicate:
+            logger.warning(f"Topic '{topic}' is a duplicate. Skipping...")
+            sheets.update_row_status(row_index, "Skipped - Duplicate Topic")
+            return
         
         # 4. Scrape Products (with 3-attempt retry logic)
         import time
