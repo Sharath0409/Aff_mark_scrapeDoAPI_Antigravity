@@ -220,10 +220,10 @@ class SheetsManager:
                 # Initialize Dashboard if empty or missing
                 init_values = [
                     ["Metric", "Count"],
-                    ["Success", "0"],
-                    ["Failed", "0"],
-                    ["Skipped - Duplicate Topic", "0"],
-                    ["Total Runs", "0"]
+                    ["Success", 0],
+                    ["Failed", 0],
+                    ["Skipped - Duplicate Topic", 0],
+                    ["Total Runs", 0]
                 ]
                 self.sheet.values().update(
                     spreadsheetId=self.sheet_id,
@@ -242,7 +242,7 @@ class SheetsManager:
                 current_count = int(values[idx][1]) if len(values[idx]) > 1 else 0
                 updates.append({
                     "range": f"{dashboard_sheet}!B{idx+1}",
-                    "values": [[str(current_count + 1)]]
+                    "values": [[current_count + 1]]
                 })
             
             # 2. Always increment 'Total Runs'
@@ -251,7 +251,7 @@ class SheetsManager:
                 current_total = int(values[idx][1]) if len(values[idx]) > 1 else 0
                 updates.append({
                     "range": f"{dashboard_sheet}!B{idx+1}",
-                    "values": [[str(current_total + 1)]]
+                    "values": [[current_total + 1]]
                 })
 
             for update in updates:
