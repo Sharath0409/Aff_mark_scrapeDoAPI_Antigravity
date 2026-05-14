@@ -65,7 +65,7 @@ def main():
             logger.warning(f"Topic '{topic}' is a duplicate. Skipping...")
             sheets.update_row_status(row_index, "Skipped - Duplicate Topic")
             sheets.update_dashboard_stats("Skipped - Duplicate Topic")
-            sheets.log_execution(topic, "Skipped - Duplicate Topic")
+            sheets.log_execution(topic, "Skipped - Duplicate Topic", model="N/A", product_count=0)
             return
         
         # 4. Scrape Products (with 3-attempt retry logic)
@@ -118,7 +118,13 @@ def main():
         
         # Update Dashboard and Logs
         sheets.update_dashboard_stats("Success")
-        sheets.log_execution(topic, "Success", url=published_url)
+        sheets.log_execution(
+            topic, 
+            "Success", 
+            url=published_url, 
+            model="gpt-4o", 
+            product_count=len(products_data)
+        )
             
         logger.info(f"Pipeline finished successfully for topic: {topic}")
         
@@ -130,7 +136,13 @@ def main():
         # 9. Update Dashboard and Logs for failure
         try:
             sheets.update_dashboard_stats("Failed")
-            sheets.log_execution(topic if 'topic' in locals() else "Unknown", "Failed", error=str(e))
+            sheets.log_execution(
+                topic if 'topic' in locals() else "Unknown", 
+                "Failed", 
+                error=str(e),
+                model="gpt-4o",
+                product_count=len(products_data) if 'products_data' in locals() else 0
+            )
         except:
             pass
         # 10. Send Fatal Failure Report

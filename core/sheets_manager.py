@@ -269,26 +269,26 @@ class SheetsManager:
         except Exception as e:
             logger.error(f"Failed to update dashboard stats: {e}")
 
-    def log_execution(self, topic, status, url="", error=""):
-        """Log the detailed execution of a single row into 'Execution Logs' tab."""
+    def log_execution(self, topic, status, url="", error="", model="gpt-4o", product_count=0):
+        """Log the detailed execution history of a single row into 'Execution Logs' tab."""
         log_sheet = "Execution Logs"
         try:
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             # Check for header initialization
-            result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{log_sheet}!A1:E1").execute()
+            result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{log_sheet}!A1:G1").execute()
             if not result.get('values'):
-                headers = [["Timestamp", "Topic", "Status", "URL", "Error Log"]]
+                headers = [["Timestamp", "Topic", "Status", "Model", "Products", "URL", "Error Log"]]
                 self.sheet.values().update(
                     spreadsheetId=self.sheet_id,
-                    range=f"{log_sheet}!A1:E1",
+                    range=f"{log_sheet}!A1:G1",
                     valueInputOption="RAW",
                     body={"values": headers}
                 ).execute()
 
-            # Append log entry
-            log_entry = [[timestamp, topic, status, url, error]]
+            # Append log entry (Preserves full history, one row per execution)
+            log_entry = [[timestamp, topic, status, model, product_count, url, error]]
             self.sheet.values().append(
                 spreadsheetId=self.sheet_id,
                 range=log_sheet,
@@ -296,6 +296,6 @@ class SheetsManager:
                 insertDataOption="INSERT_ROWS",
                 body={"values": log_entry}
             ).execute()
-            logger.info(f"Execution detail logged to '{log_sheet}' for: {topic}")
+            logger.info(f"Historical record added to '{log_sheet}' for: {topic}")
         except Exception as e:
-            logger.error(f"Failed to log execution detail: {e}")
+            logger.error(f"Failed to save execution history: {e}")
