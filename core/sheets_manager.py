@@ -207,3 +207,62 @@ class SheetsManager:
         except Exception as e:
             logger.error(f"Error getting processed topics from sheet: {e}")
             return []
+
+    def update_dashboard_stats(self, status):
+        """Update the 'Dashboard' sheet with execution statistics."""
+        dashboard_sheet = "Dashboard"
+        try:
+            # Read Dashboard data
+            result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{dashboard_sheet}!A1:B10").execute()
+            values = result.get('values', [])
+            
+            if not values:
+                # Initialize Dashboard if empty or missing
+                init_values = [
+                    ["Metric", "Count"],
+                    ["Success", "0"],
+                    ["Failed", "0"],
+                    ["Skipped - Duplicate Topic", "0"],
+                    ["Total Runs", "0"]
+                ]
+                self.sheet.values().update(
+                    spreadsheetId=self.sheet_id,
+                    range=f"{dashboard_sheet}!A1:B5",
+                    valueInputOption="RAW",
+                    body={"values": init_values}
+                ).execute()
+                values = init_values
+
+            metric_col = [row[0] for row in values]
+            updates = []
+            
+            # 1. Increment specific status count
+            if status in metric_col:
+                idx = metric_col.index(status)
+                current_count = int(values[idx][1]) if len(values[idx]) > 1 else 0
+                updates.append({
+                    "range": f"{dashboard_sheet}!B{idx+1}",
+                    "values": [[str(current_count + 1)]]
+                })
+            
+            # 2. Always increment 'Total Runs'
+            if "Total Runs" in metric_col:
+                idx = metric_col.index("Total Runs")
+                current_total = int(values[idx][1]) if len(values[idx]) > 1 else 0
+                updates.append({
+                    "range": f"{dashboard_sheet}!B{idx+1}",
+                    "values": [[str(current_total + 1)]]
+                })
+
+            for update in updates:
+                self.sheet.values().update(
+                    spreadsheetId=self.sheet_id,
+                    range=update["range"],
+                    valueInputOption="RAW",
+                    body={"values": update["values"]}
+                ).execute()
+                
+            logger.info(f"Dashboard updated with status: {status}")
+        except Exception as e:
+            logger.error(f"Failed to update dashboard stats: {e}")
+            logger.warning("Make sure you have a sheet named 'Dashboard' created in your Google Sheet.")
