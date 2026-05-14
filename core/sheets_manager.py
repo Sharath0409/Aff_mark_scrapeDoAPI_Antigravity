@@ -31,6 +31,34 @@ class SheetsManager:
             logger.error(f"Failed to initialize SheetsManager: {e}")
             raise
 
+    def _ensure_sheet_exists(self, sheet_name):
+        """Check if a sheet exists, if not, create it."""
+        try:
+            spreadsheet = self.sheet.get(spreadsheetId=self.sheet_id).execute()
+            sheets = spreadsheet.get('sheets', [])
+            exists = any(s.get('properties', {}).get('title') == sheet_name for s in sheets)
+            
+            if not exists:
+                logger.info(f"Sheet '{sheet_name}' not found. Creating it...")
+                batch_update_request_body = {
+                    'requests': [{
+                        'addSheet': {
+                            'properties': {
+                                'title': sheet_name
+                            }
+                        }
+                    }]
+                }
+                self.sheet.batchUpdate(
+                    spreadsheetId=self.sheet_id,
+                    body=batch_update_request_body
+                ).execute()
+                logger.info(f"Successfully created sheet: {sheet_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error ensuring sheet exists ({sheet_name}): {e}")
+            return False
+
     def get_all_rows(self):
         """Fetch all rows from the specified sheet."""
         try:
@@ -212,6 +240,7 @@ class SheetsManager:
         """Update the 'Dashboard' sheet with execution statistics and live formulas."""
         dashboard_sheet = "Dashboard"
         try:
+            self._ensure_sheet_exists(dashboard_sheet)
             # Read Dashboard data
             result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{dashboard_sheet}!A1:B10").execute()
             values = result.get('values', [])
@@ -273,6 +302,7 @@ class SheetsManager:
         """Log the detailed execution history of a single row into 'Execution Logs' tab."""
         log_sheet = "Execution Logs"
         try:
+            self._ensure_sheet_exists(log_sheet)
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
