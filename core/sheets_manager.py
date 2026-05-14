@@ -209,7 +209,7 @@ class SheetsManager:
             return []
 
     def update_dashboard_stats(self, status):
-        """Update the 'Dashboard' sheet with execution statistics."""
+        """Update the 'Dashboard' sheet with execution statistics and live formulas."""
         dashboard_sheet = "Dashboard"
         try:
             # Read Dashboard data
@@ -217,18 +217,21 @@ class SheetsManager:
             values = result.get('values', [])
             
             if not values:
-                # Initialize Dashboard if empty or missing
+                # Initialize Dashboard with interactive formulas
                 init_values = [
                     ["Metric", "Count"],
                     ["Success", 0],
                     ["Failed", 0],
                     ["Skipped - Duplicate Topic", 0],
-                    ["Total Runs", 0]
+                    ["Total Runs", 0],
+                    ["", ""],
+                    ["Live Success Rate (%)", "=IF(B5>0, ROUND(B2/B5*100, 2), 0)"],
+                    ["Total Published Articles", "=B2"]
                 ]
                 self.sheet.values().update(
                     spreadsheetId=self.sheet_id,
-                    range=f"{dashboard_sheet}!A1:B5",
-                    valueInputOption="RAW",
+                    range=f"{dashboard_sheet}!A1:B8",
+                    valueInputOption="USER_ENTERED", # Use USER_ENTERED to parse formulas
                     body={"values": init_values}
                 ).execute()
                 values = init_values
@@ -265,4 +268,34 @@ class SheetsManager:
             logger.info(f"Dashboard updated with status: {status}")
         except Exception as e:
             logger.error(f"Failed to update dashboard stats: {e}")
-            logger.warning("Make sure you have a sheet named 'Dashboard' created in your Google Sheet.")
+
+    def log_execution(self, topic, status, url="", error=""):
+        """Log the detailed execution of a single row into 'Execution Logs' tab."""
+        log_sheet = "Execution Logs"
+        try:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Check for header initialization
+            result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{log_sheet}!A1:E1").execute()
+            if not result.get('values'):
+                headers = [["Timestamp", "Topic", "Status", "URL", "Error Log"]]
+                self.sheet.values().update(
+                    spreadsheetId=self.sheet_id,
+                    range=f"{log_sheet}!A1:E1",
+                    valueInputOption="RAW",
+                    body={"values": headers}
+                ).execute()
+
+            # Append log entry
+            log_entry = [[timestamp, topic, status, url, error]]
+            self.sheet.values().append(
+                spreadsheetId=self.sheet_id,
+                range=log_sheet,
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": log_entry}
+            ).execute()
+            logger.info(f"Execution detail logged to '{log_sheet}' for: {topic}")
+        except Exception as e:
+            logger.error(f"Failed to log execution detail: {e}")
