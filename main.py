@@ -9,7 +9,8 @@ from core.blogger_publisher import BloggerPublisher
 from core.notifier import EmailNotifier
 from core.internal_linker import InternalLinkManager
 from utils.text_cleaner import normalize_topic
-from utils.image_engine import ImageEngine
+from utils.image_optimizer import ImageOptimizer
+from utils.image_uploader import BloggerCDNUploader
 
 logger = get_logger("main")
 
@@ -24,11 +25,9 @@ def main():
     notifier = EmailNotifier()
     link_manager = InternalLinkManager(publisher)
     
-    # Initialize GitHub-based Image Engine
-    image_engine = ImageEngine(
-        github_user=settings.GITHUB_USERNAME,
-        github_repo=settings.GITHUB_REPO_NAME
-    )
+    # Initialize Optimizer and Native Uploader
+    optimizer = ImageOptimizer()
+    uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
     
     try:
         # 2. Check pending count & warn if necessary
@@ -92,17 +91,18 @@ def main():
         for url in product_urls[:3]:
             data = scraper.scrape_product_details(url)
             if data:
-                # --- IMAGE OPTIMIZATION (GitHub Pages Flow) ---
+                # --- BLOGGER-NATIVE IMAGE OPTIMIZATION ---
                 raw_image_url = data.get('image_url')
                 if raw_image_url:
-                    optimized_url = image_engine.download_and_optimize(
-                        raw_image_url, 
-                        data.get('title', 'product'),
-                        category=category
-                    )
-                    if optimized_url:
-                        data['image_url'] = optimized_url
-                # ---------------------------------------------
+                    logger.info(f"Processing image for: {data.get('title')}")
+                    # Download & Optimize Locally
+                    temp_webp = optimizer.process_from_url(raw_image_url, data.get('title', 'product'))
+                    if temp_webp:
+                        # Upload to Google CDN
+                        cdn_url = uploader.upload_to_google_cdn(temp_webp)
+                        if cdn_url:
+                            data['image_url'] = cdn_url
+                # ----------------------------------------
                 products_data.append(data)
                 
         # 5. Generate Content
@@ -124,7 +124,10 @@ def main():
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
             
-        logger.info(f"Pipeline finished successfully: {topic}")
+        # 8. Cleanup Temporary Image Files
+        optimizer.cleanup()
+        
+        logger.info(f"Pipeline finished successfully for topic: {topic}")
         notifier.send_report("Success", topic, f"Post published at: {published_url}")
         
     except Exception as e:

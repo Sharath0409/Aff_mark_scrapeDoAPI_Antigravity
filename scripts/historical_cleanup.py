@@ -3,7 +3,8 @@ import logging
 from bs4 import BeautifulSoup
 from config import settings
 from core.blogger_publisher import BloggerPublisher
-from utils.image_engine import ImageEngine
+from utils.image_optimizer import ImageOptimizer
+from utils.image_uploader import BloggerCDNUploader
 from datetime import datetime
 
 # Setup logging
@@ -13,10 +14,8 @@ logger = logging.getLogger("historical_cleanup")
 class HistoricalCleanup:
     def __init__(self):
         self.publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
-        self.engine = ImageEngine(
-            github_user=settings.GITHUB_USERNAME,
-            github_repo=settings.GITHUB_REPO_NAME
-        )
+        self.optimizer = ImageOptimizer()
+        self.uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
         self.backup_dir = "backups_html"
         os.makedirs(self.backup_dir, exist_ok=True)
 
@@ -37,7 +36,7 @@ class HistoricalCleanup:
             logger.info("No posts found to process.")
             return
 
-        logger.info(f"Found {len(posts)} posts. Starting GitHub Pages migration...")
+        logger.info(f"Found {len(posts)} posts. Starting Blogger CDN migration...")
 
         for post in posts:
             post_id = post['id']
@@ -55,19 +54,21 @@ class HistoricalCleanup:
             for img in images:
                 src = img.get('src', '')
                 
-                # Detect unoptimized Amazon/External URLs
-                if "amazon.com" in src or "ssl-images-amazon" in src or "cloudinary" in src:
-                    logger.info(f"Optimizing: {src}")
+                # Detect unoptimized Amazon/External/GitHub URLs
+                if any(x in src for x in ["amazon.com", "ssl-images-amazon", "github.io", "cloudinary"]):
+                    logger.info(f"Optimizing for Blogger CDN: {src}")
                     
-                    # 1. Optimize and Save to Repo
-                    # We use "historical" as category for old posts organization
-                    optimized_url = self.engine.download_and_optimize(src, title, category="historical")
+                    # 1. Download & Optimize Locally
+                    temp_webp = self.optimizer.process_from_url(src, title)
                     
-                    if optimized_url:
-                        img['src'] = optimized_url
-                        changes_made = True
+                    if temp_webp:
+                        # 2. Upload to Blogger CDN
+                        cdn_url = self.uploader.upload_to_google_cdn(temp_webp)
+                        if cdn_url:
+                            img['src'] = cdn_url
+                            changes_made = True
 
-                # 2. Force Lazy Loading
+                # 3. Force Lazy Loading
                 if img.get('loading') != 'lazy':
                     img['loading'] = 'lazy'
                     changes_made = True
@@ -84,10 +85,13 @@ class HistoricalCleanup:
                         body={'content': updated_html}
                     ).execute()
                     logger.info(f"Updated: {title}")
+                    
+            # Cleanup temp files after each post
+            self.optimizer.cleanup()
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Migrate Blogger images to GitHub Pages.")
+    parser = argparse.ArgumentParser(description="Migrate Blogger images to Blogger CDN.")
     parser.add_argument("--limit", type=int, help="Limit number of posts")
     parser.add_argument("--dry-run", action="store_true", help="Don't update live")
     
