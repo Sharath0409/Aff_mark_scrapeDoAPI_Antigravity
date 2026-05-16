@@ -55,10 +55,12 @@ class ImageOptimizer:
     def process_from_url(self, url, title_keyword):
         """
         Main pipeline: Download -> Enhance -> Optimize -> WebP
+        Returns: (str: output_path, int: width, int: height)
         """
         image_hash = self._get_hash(url)
         safe_name = slugify(title_keyword)[:50]
-        temp_path = self.temp_dir / f"{safe_name}-{image_hash[:6]}.webp"
+        output_filename = f"{safe_name}-{image_hash[:6]}.webp"
+        output_path = self.temp_dir / output_filename
 
         try:
             # 1. Download
@@ -72,27 +74,28 @@ class ImageOptimizer:
             # 2. Analyze & Enhance
             img = self.analyze_and_enhance(img)
 
-            # 3. Intelligent Resize
+            # 3. Intelligent Resize (Maintain Aspect Ratio)
             width, height = img.size
             if width > self.max_width:
                 ratio = self.max_width / float(width)
                 new_height = int(float(height) * float(ratio))
                 img = img.resize((self.max_width, new_height), Image.Resampling.LANCZOS)
-                logger.info(f"Resized to {self.max_width}px wide.")
+                width, height = img.size
+                logger.info(f"Resized to {width}px wide.")
 
             # 4. Convert to WebP & Compress
-            img.save(temp_path, "WEBP", quality=85, method=6)
+            img.save(output_path, "WEBP", quality=85, method=6)
             
             # Check size and re-compress if needed
-            if temp_path.stat().st_size > self.target_size_kb * 1024:
-                img.save(temp_path, "WEBP", quality=70, method=6)
+            if output_path.stat().st_size > self.target_size_kb * 1024:
+                img.save(output_path, "WEBP", quality=70, method=6)
                 
-            logger.info(f"Image optimized locally: {temp_path.name} ({temp_path.stat().st_size // 1024} KB)")
-            return str(temp_path)
+            logger.info(f"Image optimized locally: {output_path.name} ({output_path.stat().st_size // 1024} KB)")
+            return str(output_path), width, height
 
         except Exception as e:
             logger.error(f"Failed to process image {url}: {e}")
-            return None
+            return None, 0, 0
 
     def cleanup(self):
         """Purge all temporary files."""

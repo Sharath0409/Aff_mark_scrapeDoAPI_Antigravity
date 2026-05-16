@@ -96,12 +96,14 @@ def main():
                 if raw_image_url:
                     logger.info(f"Processing image for: {data.get('title')}")
                     # Download & Optimize Locally
-                    temp_webp = optimizer.process_from_url(raw_image_url, data.get('title', 'product'))
+                    temp_webp, img_w, img_h = optimizer.process_from_url(raw_image_url, data.get('title', 'product'))
                     if temp_webp:
                         # Upload to GCS CDN
                         cdn_url = uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
                         if cdn_url:
                             data['image_url'] = cdn_url
+                            data['image_width'] = img_w
+                            data['image_height'] = img_h
                 # ----------------------------------------
                 products_data.append(data)
                 

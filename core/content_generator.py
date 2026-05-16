@@ -126,14 +126,17 @@ class ContentGenerator:
             )
             
             review_content = self.generate_section(r_prompt, model="gpt-4o")
-            image_html = f'<div class="product-image-centered"><img src="{p["image_url"]}" alt="{p["title"]}"></div>' if p.get('image_url') else ''
+            # Build optimized image tag with explicit dimensions
+            image_html = ""
+            if p.get('image_url'):
+                width_attr = f' width="{p.get("image_width")}"' if p.get("image_width") else ''
+                height_attr = f' height="{p.get("image_height")}"' if p.get("image_height") else ''
+                image_html = f'<div class="product-image-centered"><img src="{p["image_url"]}" alt="{p["title"]}"{width_attr}{height_attr} loading="lazy"></div>'
             
             reviews_html += f"""
             <section class="product-section">
                 <h3 class="product-title">{p['title']}</h3>
-                <div class="product-image-centered">
-                    {image_html}
-                </div>
+                {image_html}
                 <div class="product-summary-full">
                     <div class="price-badge">Price: {p['price']}</div>
                     {review_content}
