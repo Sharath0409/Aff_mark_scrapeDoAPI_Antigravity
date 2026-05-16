@@ -1,11 +1,16 @@
 import os
+import sys
 import logging
+from datetime import datetime
+
+# Add project root to sys.path to allow importing from core/config/utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from bs4 import BeautifulSoup
 from config import settings
 from core.blogger_publisher import BloggerPublisher
 from utils.image_optimizer import ImageOptimizer
 from utils.image_uploader import BloggerCDNUploader
-from datetime import datetime
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -62,8 +67,8 @@ class HistoricalCleanup:
                     temp_webp = self.optimizer.process_from_url(src, title)
                     
                     if temp_webp:
-                        # 2. Upload to Blogger CDN
-                        cdn_url = self.uploader.upload_to_google_cdn(temp_webp)
+                        # 2. Upload to Blogger CDN using shared folder
+                        cdn_url = self.uploader.upload_to_google_cdn(temp_webp, folder_id=settings.GOOGLE_DRIVE_FOLDER_ID)
                         if cdn_url:
                             img['src'] = cdn_url
                             changes_made = True

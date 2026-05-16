@@ -10,3 +10,4 @@ python-dotenv
 python-slugify
 requests
 tenacity
+opencv-python
