@@ -1,10 +1,13 @@
-requests
+Pillow
 beautifulsoup4
-openai
+cloudinary
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
-pandas
 jinja2
+openai
+pandas
 python-dotenv
+python-slugify
+requests
 tenacity

@@ -9,6 +9,8 @@ from core.blogger_publisher import BloggerPublisher
 from core.notifier import EmailNotifier
 from core.internal_linker import InternalLinkManager
 from utils.text_cleaner import normalize_topic
+from utils.image_engine import ImageEngine
+from utils.image_uploader import CloudinaryUploader
 
 logger = get_logger("main")
 
@@ -22,6 +24,14 @@ def main():
     publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
     notifier = EmailNotifier()
     link_manager = InternalLinkManager(publisher)
+    
+    # Initialize Optimization Engine
+    image_engine = ImageEngine()
+    uploader = CloudinaryUploader(
+        cloud_name=settings.CLOUDINARY_NAME,
+        api_key=settings.CLOUDINARY_API_KEY,
+        api_secret=settings.CLOUDINARY_API_SECRET
+    )
     
     try:
         # 2. Check pending count & warn if necessary
@@ -89,6 +99,16 @@ def main():
         for url in product_urls[:3]:  # Top 3 products
             data = scraper.scrape_product_details(url)
             if data:
+                # --- IMAGE OPTIMIZATION ---
+                raw_image_url = data.get('image_url')
+                if raw_image_url:
+                    logger.info(f"Optimizing product image for: {data.get('title')}")
+                    local_webp = image_engine.download_and_optimize(raw_image_url, data.get('title', 'product'))
+                    if local_webp:
+                        optimized_url = uploader.upload(local_webp)
+                        if optimized_url:
+                            data['image_url'] = optimized_url
+                # -------------------------
                 products_data.append(data)
                 
         # 5. Generate Content
