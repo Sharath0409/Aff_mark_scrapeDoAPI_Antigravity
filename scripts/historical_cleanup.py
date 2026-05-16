@@ -60,9 +60,9 @@ class HistoricalCleanup:
             for img in images:
                 src = img.get('src', '')
                 
-                # Detect unoptimized Amazon/External/GitHub URLs
-                if any(x in src for x in ["amazon.com", "ssl-images-amazon", "github.io", "cloudinary"]):
-                    logger.info(f"Optimizing for Blogger CDN: {src}")
+                # Broadened Detection: If image is NOT already in our GCS bucket, optimize it!
+                if src and settings.GCS_BUCKET_NAME not in src:
+                    logger.info(f"Optimizing non-GCS image: {src}")
                     
                     # 1. Download & Optimize Locally
                     temp_webp = self.optimizer.process_from_url(src, title)

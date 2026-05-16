@@ -11,3 +11,4 @@ python-slugify
 requests
 tenacity
 opencv-python
+google-cloud-storage
