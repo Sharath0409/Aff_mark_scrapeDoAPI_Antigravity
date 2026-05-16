@@ -1,8 +1,6 @@
 import os
-import requests
 import logging
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from google.cloud import storage
 from config import settings
 
 logger = logging.getLogger("blogger_cdn_uploader")
@@ -10,74 +8,53 @@ logger = logging.getLogger("blogger_cdn_uploader")
 class BloggerCDNUploader:
     def __init__(self, service_account_path):
         """
-        Uses Google Photos API / Google infrastructure to host images.
-        Note: The simplest production-grade way to get 'googleusercontent.com' URLs 
-        without complex Photos OAuth is to use the Google Drive 'webContentLink' 
-        pattern or a public Google Cloud bucket. 
-        
-        HOWEVER, for pure Blogger-Native style, we'll use a logic that 
-        uploads to Google Drive and converts to a direct Google CDN proxy URL 
-        which is functionally identical to the Blogger native hosting.
+        Uses Google Cloud Storage (GCS) for professional-grade image hosting.
+        Replaces Google Drive to avoid Service Account quota limitations.
         """
-        from google.oauth2.service_account import Credentials
         import json
         import base64
         
-        self.scopes = ['https://www.googleapis.com/auth/drive.file']
-        
-        # Determine if service_account_path is a path or base64 string
         try:
+            # Determine if service_account_path is a path or base64 string
             if service_account_path.endswith('.json'):
-                self.creds = Credentials.from_service_account_file(service_account_path, scopes=self.scopes)
+                self.client = storage.Client.from_service_account_json(service_account_path)
             else:
                 # Assume base64 encoded JSON string
                 padding = len(service_account_path) % 4
                 if padding > 0:
                     service_account_path += '=' * (4 - padding)
                 creds_json = json.loads(base64.b64decode(service_account_path).decode('utf-8'))
-                self.creds = Credentials.from_service_account_info(creds_json, scopes=self.scopes)
+                self.client = storage.Client.from_service_account_info(creds_json)
+            
+            logger.info("Google Cloud Storage (GCS) Bridge initialized.")
         except Exception as e:
             logger.error(f"Failed to load credentials for BloggerCDNUploader: {e}")
             raise
-            
-        self.drive_service = build('drive', 'v3', credentials=self.creds)
-        logger.info("Google Drive CDN Bridge initialized.")
 
-    def upload_to_google_cdn(self, file_path, folder_id=None):
+    def upload_to_google_cdn(self, file_path, bucket_name=None):
         """
-        Uploads image to Google infrastructure using a shared folder to avoid quota issues.
+        Uploads image to Google Cloud Storage and returns a public URL.
         """
+        if not bucket_name:
+            logger.error("No GCS_BUCKET_NAME provided in settings.")
+            return None
+
         try:
+            bucket = self.client.bucket(bucket_name)
             filename = os.path.basename(file_path)
-            file_metadata = {'name': filename}
             
-            # If a folder_id is provided, upload into that folder
-            if folder_id:
-                file_metadata['parents'] = [folder_id]
-                
-            media = MediaFileUpload(file_path, mimetype='image/webp', resumable=True)
+            # Destination path in bucket (keeping it clean)
+            blob = bucket.blob(f"blog-assets/{filename}")
             
-            file = self.drive_service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id, webContentLink'
-            ).execute()
+            # Upload the file
+            blob.upload_from_filename(file_path, content_type='image/webp')
             
-            file_id = file.get('id')
+            # The public URL format for GCS
+            public_url = f"https://storage.googleapis.com/{bucket_name}/blog-assets/{filename}"
             
-            # Make the file public so it can be served
-            self.drive_service.permissions().create(
-                fileId=file_id,
-                body={'type': 'anyone', 'role': 'reader'}
-            ).execute()
-            
-            # Construct a direct Google CDN-style URL (Proxying through Google's infrastructure)
-            # This URL format is extremely fast and serves as a 'googleusercontent' style link.
-            direct_url = f"https://lh3.googleusercontent.com/u/0/d/{file_id}"
-            
-            logger.info(f"Image hosted on Google CDN: {direct_url}")
-            return direct_url
+            logger.info(f"Image hosted on GCS CDN: {public_url}")
+            return public_url
 
         except Exception as e:
-            logger.error(f"Google CDN upload failed: {e}")
+            logger.error(f"GCS CDN upload failed: {e}")
             return None

@@ -23,6 +23,7 @@ class HistoricalCleanup:
         self.uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
         self.backup_dir = "backups_html"
         os.makedirs(self.backup_dir, exist_ok=True)
+        logger.info(f"DEBUG: Loaded Folder ID from settings: '{settings.GOOGLE_DRIVE_FOLDER_ID}'")
 
     def backup_post(self, post_id, title, html):
         filename = f"{self.backup_dir}/{post_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
@@ -67,8 +68,8 @@ class HistoricalCleanup:
                     temp_webp = self.optimizer.process_from_url(src, title)
                     
                     if temp_webp:
-                        # 2. Upload to Blogger CDN using shared folder
-                        cdn_url = self.uploader.upload_to_google_cdn(temp_webp, folder_id=settings.GOOGLE_DRIVE_FOLDER_ID)
+                        # 2. Upload to GCS CDN
+                        cdn_url = self.uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
                         if cdn_url:
                             img['src'] = cdn_url
                             changes_made = True

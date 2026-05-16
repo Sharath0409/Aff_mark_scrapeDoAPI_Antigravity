@@ -98,8 +98,8 @@ def main():
                     # Download & Optimize Locally
                     temp_webp = optimizer.process_from_url(raw_image_url, data.get('title', 'product'))
                     if temp_webp:
-                        # Upload to Google CDN using shared folder
-                        cdn_url = uploader.upload_to_google_cdn(temp_webp, folder_id=settings.GOOGLE_DRIVE_FOLDER_ID)
+                        # Upload to GCS CDN
+                        cdn_url = uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
                         if cdn_url:
                             data['image_url'] = cdn_url
                 # ----------------------------------------
