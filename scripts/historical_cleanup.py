@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 from config import settings
 from core.blogger_publisher import BloggerPublisher
 from utils.image_engine import ImageEngine
-from utils.image_uploader import CloudinaryUploader
 from datetime import datetime
 
 # Setup logging
@@ -14,11 +13,9 @@ logger = logging.getLogger("historical_cleanup")
 class HistoricalCleanup:
     def __init__(self):
         self.publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
-        self.engine = ImageEngine()
-        self.uploader = CloudinaryUploader(
-            cloud_name=settings.CLOUDINARY_NAME,
-            api_key=settings.CLOUDINARY_API_KEY,
-            api_secret=settings.CLOUDINARY_API_SECRET
+        self.engine = ImageEngine(
+            github_user=settings.GITHUB_USERNAME,
+            github_repo=settings.GITHUB_REPO_NAME
         )
         self.backup_dir = "backups_html"
         os.makedirs(self.backup_dir, exist_ok=True)
@@ -40,7 +37,7 @@ class HistoricalCleanup:
             logger.info("No posts found to process.")
             return
 
-        logger.info(f"Found {len(posts)} posts. Starting migration...")
+        logger.info(f"Found {len(posts)} posts. Starting GitHub Pages migration...")
 
         for post in posts:
             post_id = post['id']
@@ -48,65 +45,51 @@ class HistoricalCleanup:
             content = post['content']
             
             logger.info(f"--- Processing: {title} (ID: {post_id}) ---")
-            
             soup = BeautifulSoup(content, 'html.parser')
             images = soup.find_all('img')
             
             if not images:
-                logger.info(f"No images found in post: {title}")
                 continue
 
             changes_made = False
             for img in images:
                 src = img.get('src', '')
                 
-                # Check if it's an external Amazon or unoptimized URL
-                if "amazon.com" in src or "ssl-images-amazon" in src:
-                    logger.info(f"Found unoptimized image: {src}")
+                # Detect unoptimized Amazon/External URLs
+                if "amazon.com" in src or "ssl-images-amazon" in src or "cloudinary" in src:
+                    logger.info(f"Optimizing: {src}")
                     
-                    # 1. Optimize
-                    local_webp = self.engine.download_and_optimize(src, title)
-                    if local_webp:
-                        # 2. Upload
-                        optimized_url = self.uploader.upload(local_webp)
-                        if optimized_url:
-                            # 3. Replace
-                            img['src'] = optimized_url
-                            changes_made = True
-                            logger.info(f"Replaced image with optimized version.")
+                    # 1. Optimize and Save to Repo
+                    # We use "historical" as category for old posts organization
+                    optimized_url = self.engine.download_and_optimize(src, title, category="historical")
+                    
+                    if optimized_url:
+                        img['src'] = optimized_url
+                        changes_made = True
 
-                # 4. Add Lazy Loading if missing
-                if not img.get('loading'):
+                # 2. Force Lazy Loading
+                if img.get('loading') != 'lazy':
                     img['loading'] = 'lazy'
                     changes_made = True
-                    logger.info("Added loading='lazy' to image.")
 
             if changes_made:
                 if dry_run:
-                    logger.info(f"[DRY RUN] Would update post: {title}")
+                    logger.info(f"[DRY RUN] Would update: {title}")
                 else:
-                    # Backup before update
                     self.backup_post(post_id, title, content)
-                    
-                    # Update post on Blogger
                     updated_html = str(soup)
                     self.publisher.service.posts().patch(
                         blogId=self.publisher.blog_id,
                         postId=post_id,
                         body={'content': updated_html}
                     ).execute()
-                    logger.info(f"Successfully updated post: {title}")
-            else:
-                logger.info(f"No changes needed for post: {title}")
+                    logger.info(f"Updated: {title}")
 
 if __name__ == "__main__":
-    # Example execution
     import argparse
-    parser = argparse.ArgumentParser(description="Migrate historical Blogger posts to optimized images.")
-    parser.add_argument("--limit", type=int, help="Limit number of posts to process")
-    parser.add_argument("--dry-run", action="store_true", help="Run without updating Blogger")
+    parser = argparse.ArgumentParser(description="Migrate Blogger images to GitHub Pages.")
+    parser.add_argument("--limit", type=int, help="Limit number of posts")
+    parser.add_argument("--dry-run", action="store_true", help="Don't update live")
     
     args = parser.parse_args()
-    
-    cleanup = HistoricalCleanup()
-    cleanup.process_posts(limit=args.limit, dry_run=args.dry_run)
+    HistoricalCleanup().process_posts(limit=args.limit, dry_run=args.dry_run)

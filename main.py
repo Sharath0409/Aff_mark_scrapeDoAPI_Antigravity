@@ -10,12 +10,11 @@ from core.notifier import EmailNotifier
 from core.internal_linker import InternalLinkManager
 from utils.text_cleaner import normalize_topic
 from utils.image_engine import ImageEngine
-from utils.image_uploader import CloudinaryUploader
 
 logger = get_logger("main")
 
 def main():
-    logger.info("Starting Autonomous Affiliate Publisher Pipeline with Duplicate Detection")
+    logger.info("Starting Autonomous Affiliate Publisher Pipeline with GitHub Pages Hosting")
     
     # 1. Initialize Modules
     sheets = SheetsManager(settings.GOOGLE_SHEET_ID, settings.GCP_SERVICE_ACCOUNT)
@@ -25,12 +24,10 @@ def main():
     notifier = EmailNotifier()
     link_manager = InternalLinkManager(publisher)
     
-    # Initialize Optimization Engine
-    image_engine = ImageEngine()
-    uploader = CloudinaryUploader(
-        cloud_name=settings.CLOUDINARY_NAME,
-        api_key=settings.CLOUDINARY_API_KEY,
-        api_secret=settings.CLOUDINARY_API_SECRET
+    # Initialize GitHub-based Image Engine
+    image_engine = ImageEngine(
+        github_user=settings.GITHUB_USERNAME,
+        github_repo=settings.GITHUB_REPO_NAME
     )
     
     try:
@@ -51,16 +48,15 @@ def main():
 
         topic = row['Topic']
         keyword = row['Keyword']
+        category = row.get('Category', 'general')
         row_index = row['row_index']
         
-        # 3.5 Refresh Post Corpus (for internal linking AND duplicate detection)
+        # 3.5 Refresh Post Corpus
         link_manager.refresh_corpus()
         
         # 3.6 Duplicate Detection Logic
         logger.info(f"Performing duplicate check for: {topic}")
         normalized_current = normalize_topic(topic)
-        
-        # Gather all historical topics (Sheet + Blogger)
         historical_sheet = sheets.get_processed_topics()
         historical_blogger = [p['title'] for p in link_manager.corpus]
         all_history = historical_sheet + historical_blogger
@@ -74,11 +70,9 @@ def main():
         if is_duplicate:
             logger.warning(f"Topic '{topic}' is a duplicate. Skipping...")
             sheets.update_row_status(row_index, "Skipped - Duplicate Topic")
-            sheets.update_dashboard_stats("Skipped - Duplicate Topic")
-            sheets.log_execution(topic, "Skipped - Duplicate Topic", model="N/A", product_count=0)
             return
         
-        # 4. Scrape Products (with 3-attempt retry logic)
+        # 4. Scrape Products
         import time
         max_retries = 3
         product_urls = []
@@ -89,83 +83,52 @@ def main():
             if product_urls:
                 break
             if attempt < max_retries:
-                logger.warning(f"No products found on attempt {attempt}. Retrying in 10 seconds...")
                 time.sleep(10)
         
         if not product_urls:
-            raise ValueError(f"No products found for keyword '{keyword}' after {max_retries} attempts.")
+            raise ValueError(f"No products found for keyword '{keyword}'.")
             
         products_data = []
-        for url in product_urls[:3]:  # Top 3 products
+        for url in product_urls[:3]:
             data = scraper.scrape_product_details(url)
             if data:
-                # --- IMAGE OPTIMIZATION ---
+                # --- IMAGE OPTIMIZATION (GitHub Pages Flow) ---
                 raw_image_url = data.get('image_url')
                 if raw_image_url:
-                    logger.info(f"Optimizing product image for: {data.get('title')}")
-                    local_webp = image_engine.download_and_optimize(raw_image_url, data.get('title', 'product'))
-                    if local_webp:
-                        optimized_url = uploader.upload(local_webp)
-                        if optimized_url:
-                            data['image_url'] = optimized_url
-                # -------------------------
+                    optimized_url = image_engine.download_and_optimize(
+                        raw_image_url, 
+                        data.get('title', 'product'),
+                        category=category
+                    )
+                    if optimized_url:
+                        data['image_url'] = optimized_url
+                # ---------------------------------------------
                 products_data.append(data)
                 
         # 5. Generate Content
         html_content = generator.generate_full_post(topic, keyword, products_data)
-        
-        # 5.5 Generate SEO Labels
         seo_labels = generator.generate_seo_tags(topic, keyword)
-        category = row.get('Category', 'Review')
         if category not in seo_labels:
             seo_labels.append(category)
         
-        # 5.6 Internal Linking Logic
+        # 5.6 Internal Linking
         related_posts = link_manager.get_related_articles(topic, seo_labels, count=3)
         if related_posts:
-            # 6.1 Contextual Injection (AI-powered anchor text matching)
             html_content = link_manager.inject_internal_links(html_content, related_posts)
-            # 6.2 Append Related Articles Footer
             html_content = link_manager.add_related_section(html_content, related_posts)
         
         # 6. Publish to Blogger
-        # Sanitize title to help Blogger generate a cleaner slug
         clean_title = topic.strip()
         published_url, current_post_id = publisher.publish_post(clean_title, html_content, labels=seo_labels)
         
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
-        
-        # Update Dashboard and Logs
-        sheets.update_dashboard_stats("Success")
-        sheets.log_execution(
-            topic, 
-            "Success", 
-            url=published_url, 
-            model="gpt-4o", 
-            product_count=len(products_data)
-        )
             
-        logger.info(f"Pipeline finished successfully for topic: {topic}")
-        
-        # 8. Send Success Report
+        logger.info(f"Pipeline finished successfully: {topic}")
         notifier.send_report("Success", topic, f"Post published at: {published_url}")
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
-        # 9. Update Dashboard and Logs for failure
-        try:
-            sheets.update_dashboard_stats("Failed")
-            sheets.log_execution(
-                topic if 'topic' in locals() else "Unknown", 
-                "Failed", 
-                error=str(e),
-                model="gpt-4o",
-                product_count=len(products_data) if 'products_data' in locals() else 0
-            )
-        except:
-            pass
-        # 10. Send Fatal Failure Report
         try:
             notifier.send_report("Failure", topic if 'topic' in locals() else "Unknown", str(e))
         except:

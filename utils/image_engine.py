@@ -10,11 +10,14 @@ from slugify import slugify
 logger = logging.getLogger("image_engine")
 
 class ImageEngine:
-    def __init__(self, cache_dir="image_cache", output_dir="temp_optimized"):
-        self.cache_dir = Path(cache_dir)
-        self.output_dir = Path(output_dir)
-        self.cache_dir.mkdir(exist_ok=True)
-        self.output_dir.mkdir(exist_ok=True)
+    def __init__(self, github_user, github_repo, image_dir="assets/images"):
+        self.github_user = github_user
+        self.github_repo = github_repo
+        self.image_dir = Path(image_dir)
+        self.image_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Base URL for GitHub Pages
+        self.base_url = f"https://{github_user}.github.io/{github_repo}/{image_dir}"
         
         # Targets
         self.max_width = 1200
@@ -24,62 +27,62 @@ class ImageEngine:
     def _get_hash(self, url):
         return hashlib.md5(url.encode()).hexdigest()
 
-    def download_and_optimize(self, url, title_keyword):
+    def get_github_url(self, filename):
+        """Constructs the public GitHub Pages URL for an image."""
+        return f"{self.base_url}/{filename}"
+
+    def download_and_optimize(self, url, title_keyword, category="general"):
         """
-        Downloads, resizes, compresses, and converts an image to WebP locally.
-        Returns the path to the optimized local file.
+        Downloads, resizes, compresses, and converts to WebP.
+        Saves to the local assets folder for GitHub Pages hosting.
         """
         image_hash = self._get_hash(url)
         safe_filename = slugify(title_keyword)[:50]
-        output_path = self.output_dir / f"{safe_filename}-{image_hash[:6]}.webp"
+        
+        # Organize by category if provided
+        cat_dir = self.image_dir / slugify(category)
+        cat_dir.mkdir(exist_ok=True)
+        
+        filename = f"{safe_filename}-{image_hash[:6]}.webp"
+        local_path = cat_dir / filename
+        
+        # Relative path for URL construction
+        rel_path = f"{slugify(category)}/{filename}"
+        public_url = self.get_github_url(rel_path)
 
-        # 1. Cache Check
-        if output_path.exists():
-            logger.info(f"Using cached optimized image: {output_path.name}")
-            return str(output_path)
+        # 1. Cache Check (Avoid re-processing if exists)
+        if local_path.exists():
+            logger.info(f"Using existing optimized image: {filename}")
+            return public_url
 
         try:
             # 2. Download
-            logger.info(f"Downloading image from: {url}")
+            logger.info(f"Downloading image: {url}")
             response = requests.get(url, timeout=15)
             response.raise_for_status()
             
             # 3. Open with Pillow
             img = Image.open(BytesIO(response.content))
-            
-            # Convert to RGB if necessary (handles PNG/RGBA)
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
 
-            # 4. Intelligent Resize
+            # 4. Resize
             width, height = img.size
             if width > self.max_width:
                 ratio = self.max_width / float(width)
                 new_height = int(float(height) * float(ratio))
                 img = img.resize((self.max_width, new_height), Image.Resampling.LANCZOS)
-                logger.info(f"Resized from {width}px to {self.max_width}px")
 
-            # 5. Optimize & Save as WebP
-            # Iterative compression to meet target size
-            quality = self.quality
-            img.save(output_path, "WEBP", quality=quality, method=6) # method 6 is slowest/best compression
+            # 5. Save as WebP
+            img.save(local_path, "WEBP", quality=self.quality, method=6)
             
-            # Check size and reduce quality if still too big
-            if output_path.stat().st_size > self.target_size_kb * 1024:
-                quality = 70
-                img.save(output_path, "WEBP", quality=quality, method=6)
+            # 6. Final Size Check
+            if local_path.stat().st_size > self.target_size_kb * 1024:
+                img.save(local_path, "WEBP", quality=70, method=6)
                 
-            logger.info(f"Optimized image saved: {output_path.name} ({output_path.stat().st_size // 1024} KB)")
-            return str(output_path)
+            logger.info(f"Optimized image ready for GitHub: {rel_path} ({local_path.stat().st_size // 1024} KB)")
+            return public_url
 
         except Exception as e:
             logger.error(f"Failed to optimize image {url}: {e}")
             return None
-
-    def cleanup_temp(self):
-        """Removes temporary optimized files but keeps cache metadata if needed."""
-        for file in self.output_dir.glob("*.webp"):
-            try:
-                file.unlink()
-            except:
-                pass
