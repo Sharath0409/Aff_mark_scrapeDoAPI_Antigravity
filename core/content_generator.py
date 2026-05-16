@@ -126,6 +126,7 @@ class ContentGenerator:
             )
             
             review_content = self.generate_section(r_prompt, model="gpt-4o")
+            
             # Build optimized image tag with explicit dimensions
             image_html = ""
             if p.get('image_url'):
