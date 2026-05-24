@@ -82,9 +82,9 @@ class ContentGenerator:
             .product-title { color: #111; font-size: 2em; font-weight: 800; margin-bottom: 20px; line-height: 1.2; text-align: center; }
             h1, h2 { text-align: center; margin-top: 50px; }
             .product-image-centered { text-align: center; margin-bottom: 30px; }
-            .product-image-centered img { max-width: 100%; height: auto; border-radius: 8px; max-height: 400px; }
+            .product-image-centered img { max-width: 100%; height: auto; width: auto; border-radius: 8px; max-height: 400px; object-fit: contain; }
             .product-summary-full { margin-bottom: 30px; }
-            .price-badge { display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.9em; margin-bottom: 15px; }
+            .price-badge { display: inline-block; background: #fef3c7; color: #451a03; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.9em; margin-bottom: 15px; }
             .verdict-box { background: #f9fafb; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; font-style: italic; }
             .pros-cons-grid { display: block; margin: 25px 0; }
             .pros-list { margin-bottom: 20px; }

@@ -17,7 +17,7 @@ class ImageOptimizer:
         self.temp_dir.mkdir(exist_ok=True)
         
         # Targets
-        self.max_width = 1200
+        self.max_width = 800
         self.min_enhance_width = 800
         self.target_size_kb = 150
 
