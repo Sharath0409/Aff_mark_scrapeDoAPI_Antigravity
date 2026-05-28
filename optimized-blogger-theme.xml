@@ -4145,6 +4145,62 @@ window.addEventListener('load', function () {
   }, 4000);
 });
 </script>
+<!-- Mid-Article Auto-Ad Injection (Only on Posts) -->
+<b:if cond='data:view.isPost'>
+<script>
+//<![CDATA[
+window.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    // 1. Target the main content area
+    var postBodies = document.querySelectorAll('.post-body.entry-content');
+    if (!postBodies || postBodies.length === 0) return;
+    var postBody = postBodies[0];
+    
+    // 2. Defensive check: prevent duplicate injections
+    if (document.getElementById('mid-article-ad-injected')) return;
+    
+    // 3. Find valid content blocks to insert after
+    var paragraphs = postBody.querySelectorAll('p, .product-summary-full, h3');
+    if (paragraphs.length < 3) return; // Skip if article is too short
+    
+    // 4. Calculate insertion point: roughly 30% into the article
+    var insertIndex = Math.max(1, Math.floor(paragraphs.length * 0.3));
+    var targetNode = paragraphs[insertIndex];
+    
+    // 5. Create Ad Wrapper with strict CSS to prevent CLS (Layout Shift)
+    var adWrapper = document.createElement('div');
+    adWrapper.id = 'mid-article-ad-injected';
+    adWrapper.style.margin = '40px auto';
+    adWrapper.style.textAlign = 'center';
+    adWrapper.style.minHeight = '280px'; /* Reserve space */
+    adWrapper.style.display = 'block';
+    adWrapper.style.clear = 'both';
+    
+    // 6. Inject the AdSense Placeholder
+    adWrapper.innerHTML = `
+      <!-- ADSENSE CODE HERE -->
+      <ins class="adsbygoogle"
+           style="display:block; text-align:center;"
+           data-ad-layout="in-article"
+           data-ad-format="fluid"
+           data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+           data-ad-slot="XXXXXXXXXX"></ins>
+    `;
+    
+    // 7. Inject wrapper into the DOM
+    targetNode.parentNode.insertBefore(adWrapper, targetNode.nextSibling);
+    
+    // 8. Initialize AdSense (The array queues the request until adsbygoogle.js loads)
+    try {
+      (adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      console.warn("AdSense push failed", e);
+    }
+  }, 1500); // 1.5s delay to ensure content is fully painted
+});
+//]]>
+</script>
+</b:if>
 </body>
 
 </html>
