@@ -4139,8 +4139,9 @@ box-shadow:none !important;
 window.addEventListener('load', function () {
   setTimeout(function () {
     var s = document.createElement('script');
-    s.src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
+    s.src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6421444901568428';
     s.async=true;
+    s.crossOrigin='anonymous';
     document.body.appendChild(s);
   }, 4000);
 });
@@ -4178,13 +4179,13 @@ window.addEventListener('DOMContentLoaded', function() {
     
     // 6. Inject the AdSense Placeholder
     adWrapper.innerHTML = `
-      <!-- ADSENSE CODE HERE -->
+      <!-- Rectangular unit -->
       <ins class="adsbygoogle"
            style="display:block; text-align:center;"
-           data-ad-layout="in-article"
-           data-ad-format="fluid"
-           data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-           data-ad-slot="XXXXXXXXXX"></ins>
+           data-ad-client="ca-pub-6421444901568428"
+           data-ad-slot="8921225518"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
     `;
     
     // 7. Inject wrapper into the DOM
