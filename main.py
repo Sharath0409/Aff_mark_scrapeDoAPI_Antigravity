@@ -11,6 +11,7 @@ from core.internal_linker import InternalLinkManager
 from utils.text_cleaner import normalize_topic
 from utils.image_optimizer import ImageOptimizer
 from utils.image_uploader import BloggerCDNUploader
+from scripts.remove_h1_tags import BloggerH1Remover
 
 logger = get_logger("main")
 
@@ -121,9 +122,12 @@ def main():
             html_content = link_manager.inject_internal_links(html_content, related_posts)
             html_content = link_manager.add_related_section(html_content, related_posts)
         
-        # 6. Publish to Blogger
+        # 6. Clean H1 tags before publishing
+        h1_remover = BloggerH1Remover(dry_run=False)
+        cleaned_content, _ = h1_remover.clean_post_h1(topic.strip(), html_content)
+        # 7. Publish to Blogger
         clean_title = topic.strip()
-        published_url, current_post_id = publisher.publish_post(clean_title, html_content, labels=seo_labels)
+        published_url, current_post_id = publisher.publish_post(clean_title, cleaned_content, labels=seo_labels)
         
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
