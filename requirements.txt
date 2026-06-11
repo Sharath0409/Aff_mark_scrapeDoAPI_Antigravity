@@ -1,14 +1,10 @@
 Pillow
 beautifulsoup4
 google-api-python-client
-google-auth-httplib2
 google-auth-oauthlib
-jinja2
 openai
-pandas
 python-dotenv
 python-slugify
 requests
 tenacity
-opencv-python
 google-cloud-storage

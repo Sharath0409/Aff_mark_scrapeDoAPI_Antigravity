@@ -2,8 +2,6 @@ import os
 import requests
 import hashlib
 import logging
-import cv2
-import numpy as np
 from PIL import Image, ImageFilter, ImageEnhance
 from io import BytesIO
 from pathlib import Path

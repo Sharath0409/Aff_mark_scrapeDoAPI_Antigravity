@@ -69,6 +69,8 @@ def main():
         if is_duplicate:
             logger.warning(f"Topic '{topic}' is a duplicate. Skipping...")
             sheets.update_row_status(row_index, "Skipped - Duplicate Topic")
+            sheets.update_dashboard_stats("Skipped - Duplicate Topic")
+            sheets.log_execution(topic, "Skipped - Duplicate Topic")
             return
         
         # 4. Scrape Products
@@ -125,6 +127,8 @@ def main():
         
         # 7. Update Google Sheets
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
+        sheets.update_dashboard_stats("Success")
+        sheets.log_execution(topic, "Success", url=published_url, product_count=len(products_data))
             
         # 8. Cleanup Temporary Image Files
         optimizer.cleanup()
@@ -134,6 +138,13 @@ def main():
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
+        if 'row_index' in locals():
+            try:
+                sheets.update_row_status(row_index, "Failed", error=str(e))
+                sheets.update_dashboard_stats("Failed")
+                sheets.log_execution(topic, "Failed", error=str(e))
+            except Exception as sheet_err:
+                logger.error(f"Failed to update sheet on pipeline failure: {sheet_err}")
         try:
             notifier.send_report("Failure", topic if 'topic' in locals() else "Unknown", str(e))
         except:
