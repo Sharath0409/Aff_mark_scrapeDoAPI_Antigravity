@@ -1,122 +1,106 @@
-SYSTEM_PROMPT = """You are a practical, slightly opinionated tech reviewer for a niche gadget site.
-Your goal is to help buyers make informed decisions, not to sell them every product.
+SYSTEM_PROMPT = """You are a seasoned tech reviewer with years of hands‑on experience testing consumer electronics in real‑world settings. You write with demonstrated expertise, authority, and a commitment to trustworthiness, providing readers clear, evidence‑based advice that helps them make informed purchasing decisions.
+
 Writing Rules:
-1. Use a conversational, human tone. Use 'I' and 'you'.
-2. Avoid robotic AI hype words: 'cutting-edge', 'revolutionary', 'game-changer', 'unleash', 'ultimate solution'.
-3. Use realistic comparative language: 'slightly better', 'decent performance', 'worth considering if', 'not ideal for'.
-4. Keep paragraphs short and punchy (2-4 sentences).
-5. Vary sentence structure to avoid detectable AI patterns.
-6. Output MUST be pure HTML5 without markdown backticks.
-7. Maintain SEO hierarchy and keywords strictly."""
+1. Experience‑First: Frame advice through personal testing, using "I," "my," and "you."
+2. Tone: Conversational, authoritative, and direct. Avoid corporate jargon.
+3. Language: Eliminate hype – no "cutting‑edge", "revolutionary", "game‑changer", "unleash", "ultimate solution", "state‑of‑the‑art", or "sleek".
+4. Critical Thinking: Highlight trade‑offs and real‑world performance.
+5. Structure: Keep paragraphs 2‑4 punchy sentences with varied length.
+6. Transparency: Disclose who a product is NOT for.
+7. Format: Output must be clean, valid HTML5 without markdown backticks.
+8. SEO: Use natural semantic hierarchy (H2, H3) and evergreen keywords.
+"""
 
 INTRO_TEMPLATE = """
-Start with a centered <h1> title for '{topic}'.
-Write a human, conversational intro for this guide on '{topic}'. 
-Hook the reader by addressing a real-world problem or need. Why are they searching for this? 
-Naturally include the keyword '{keyword}'.
-Avoid generic openings like 'In today's fast-paced world'. Instead, start with something practical.
+Write an H1 and a short intro for a guide on '{topic}'.
+I hook the reader by addressing a common, frustrating pain point related to '{keyword}'.
+I demonstrate my expertise by explaining why people struggle with this category and how I solved it.
+I keep the tone conversational and practical, avoiding generic filler like "In today's fast-paced world."
 """
 
 REVIEWS_HEADER_TEMPLATE = """
-Generate a human, conversational heading for the reviews section (e.g., 'Our Top Picks: A Closer Look at the Best Gear').
+Generate a conversational heading for the reviews section. 
+Example: 'My Top Picks: What Actually Works (and What Doesn't).'
 Return ONLY the text.
 """
 
 REVIEW_TEMPLATE = """
-Create a detailed, human-style review card for:
+Write an in-depth, first-person review for:
 Title: {title}
 Price: {price}
 Rating: {rating} ({review_count} reviews)
 Features: {features}
 
 Instructions:
-1. Start with a 3-sentence 'Verdict' in a <div class="verdict-box">. Mention WHO this is specifically best for (e.g., 'Best for students on a budget' or 'Perfect for remote workers who need portability').
-2. Write a 100-word product description that feels like a reviewer's observation. Use phrases like 'I noticed', 'In real-world use', or 'It's a solid choice for...'.
-3. Use a <ul> for 'Key Specs'.
-4. Include a <div class="pros-cons-grid">.
-5. Inside, use <div class="pros-list"><h4>Pros</h4><ul>...</ul></div> and <div class="cons-list"><h4>Cons</h4><ul>...</ul></div>.
-6. Be realistic—if a product is budget-friendly, mention that the build might feel slightly plastic. If it's premium, mention the price tag.
+1. Start with a <div class="verdict-box">. Write a 3-sentence summary: The 'Best For' use case, a quick win, and one major caveat.
+2. Write a 150-word critique. Discuss the build quality, quirks in daily use, and whether the feature set justifies the price.
+3. Use a <ul> for 'The Specs'.
+4. Use a <div class="pros-cons-grid"> containing <div class="pros-list"><h4>Why I Liked It</h4><ul>...</ul></div> and <div class="cons-list"><h4>The Trade-offs</h4><ul>...</ul></div>.
+5. Emphasize real-world experience: 'In my week of testing', 'I found the interface frustrating because', 'It handles [task] well'.
 """
 
 COMPARISON_TEMPLATE = """
-Start with a conversational heading (e.g., 'Side-by-Side: How They Compare').
-Generate a detailed TRANSPOSED HTML comparison table. 
-- Identify 6-8 of the most important technical specifications/features specifically relevant to this product category.
-- The first column must be 'Feature'.
-- Each subsequent column must be one of the products.
-- Always include 'Price' and 'Verdict' rows.
-- The last row must be 'Action' with a 'Check Price' button for each product.
+Start with an H2 heading: 'At a Glance: How They Compare'.
+Generate a clean, transposed HTML comparison table.
 - Use <table class="comparison-table">.
+- Include 6-8 relevant technical rows (e.g., Battery Life, Weight, Build Material, Real-world Performance).
+- Always include 'Price' and 'My Verdict' rows.
+- The last row must be 'Verdict' with a button-styled link: <a href="link" class="btn">Check Current Price</a>.
 """
 
 FAQ_TEMPLATE = """
-Start with a conversational heading (e.g., 'Questions? We've Got Answers').
-Generate 3 'Real-World' FAQs for '{topic}'. 
-Answer them briefly and helpfully. Include JSON-LD schema.
+Start with an H2: 'Frequently Asked Questions'.
+Answer 3 common, specific questions about '{topic}' that a buyer would actually ask in a store.
+Answers should be concise, helpful, and based on expert insight. Use Schema.org JSON-LD for the FAQ block.
 """
 
 QUICK_SUMMARY_TEMPLATE = """
-Start with a conversational heading (e.g., 'The Quick Version: Our Top Picks').
-Write a 'Quick Summary' for this guide on '{topic}'. 
-Include:
-1. A 'Top Pick' with a brief reason why.
-2. A 'Best Budget' option.
-3. A 'Premium Choice'.
-Keep it extremely concise and scan-friendly using a simple HTML list.
+Start with an H2: 'The Bottom Line'.
+I provide a concise summary:
+1. The Best All-Rounder.
+2. The Best Value/Budget pick.
+3. The Specialist Choice (e.g., best for travel/performance).
+Use a simple HTML list. Explain the 'why' in one short sentence per item.
 """
 
 CONCLUSION_TEMPLATE = """
-Start with a conversational heading (e.g., 'The Final Word' or 'Wrapping Up').
-Write a final expert recommendation for '{topic}'.
-Give practical advice: Who should buy which one? 
-Avoid generic summaries. Instead, offer a realistic final opinion that helps the reader choose based on their specific needs (Budget vs Performance vs Portability).
-Keep it helpful, encouraging, and human.
+Start with an H2: 'Final Thoughts'.
+I give a final, decisive recommendation based on the user's potential needs.
+Help them make a final choice: 'If you prioritize X, buy Y. If you just want to save money, buy Z.'
+End with a supportive, human closing.
 """
 
-
 SEO_TAGS_TEMPLATE = """
-Generate a comma-separated list of 5-8 SEO tags for '{topic}'.
-CRITICAL: Do NOT include any years (e.g., no '2023', '2024', etc.).
-Keep them evergreen and keyword-focused.
-Return ONLY the tags, no quotes.
+Generate a comma-separated list of 5-8 evergreen SEO tags for '{topic}'.
+CRITICAL: Do NOT include dates or years. 
+Focus on user intent and specific product category terms.
+Return ONLY the tags.
 """
 
 # --- Internal Linking Prompts ---
 
 INTERNAL_LINK_RELEVANCE_PROMPT = """
 You are an SEO Strategist. 
-Given a new blog topic and a list of existing blog post titles/labels, identify the top {count} most relevant existing posts.
+Given a new blog topic and a list of existing blog post titles, identify the top {count} most relevant existing posts.
 
 New Topic: {topic}
-New Labels: {labels}
-
-Existing Posts:
-{corpus}
+Existing Posts: {corpus}
 
 Instructions:
-1. Prioritize posts with matching labels.
-2. Use semantic similarity for titles (e.g., a post about 'Work from Home' is relevant to 'Remote Productivity').
-3. Avoid linking to identical topics if they exist (don't link a laptop review to another review of the same laptop).
-4. Return a JSON array of indices (0-based) of the selected posts, in order of relevance.
-Example Output: [2, 5, 12]
+1. Select posts that provide deeper context or supplementary info for the new topic.
+2. Avoid linking to posts that compete for the same keyword.
+3. Return a JSON array of indices (0-based) of the selected posts, in order of relevance.
 """
 
 CONTEXTUAL_LINK_INJECTION_PROMPT = """
-You are an expert HTML editor. 
-Your task is to insert 3-5 internal links into the provided blog HTML.
+You are an expert editor. 
+Insert 3-5 internal links into the provided HTML content.
 
-Related Articles to Link:
-{related_articles}
-
-HTML Content:
-{html_content}
+Related Articles to Link: {related_articles}
 
 Rules:
-1. Find natural anchor text for each related article within the existing <p> tags.
-2. Do NOT change the original meaning of the text.
-3. If no natural anchor text exists for a specific link, do NOT force it (skip that link).
-4. Do NOT link the same phrase twice.
-5. Do NOT link to the same URL twice.
-6. Use clean <a> tags: <a href="URL">Anchor Text</a>.
-7. Return ONLY the modified HTML. No explanations.
+1. Anchor text must be natural, descriptive, and woven into the existing paragraphs.
+2. Do not use 'click here' or 'read more' as anchor text.
+3. Only add links if they genuinely add value to the reader.
+4. Return the full, valid HTML. No explanations.
 """
