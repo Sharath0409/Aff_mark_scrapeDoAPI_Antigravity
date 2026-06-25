@@ -129,5 +129,9 @@ class InternalLinkManager:
         elif "<footer" in html_content:
              return html_content.replace("<footer", section_html + "<footer")
         else:
-            # Otherwise just append before the closing div
-            return html_content.replace("</div>", section_html + "</div>")
+            # Otherwise just append before the closing div (last occurrence only)
+            parts = html_content.rsplit("</div>", 1)
+            if len(parts) == 2:
+                return parts[0] + section_html + "</div>" + parts[1]
+            else:
+                return html_content + section_html
