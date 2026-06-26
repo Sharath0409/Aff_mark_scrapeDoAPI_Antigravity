@@ -78,9 +78,19 @@ class SheetsManager:
         headers = values[0]
         try:
             status_idx = headers.index("Status")
-            topic_idx = headers.index("Topic")
-            keyword_idx = headers.index("Keyword")
-            category_idx = headers.index("Category")
+            
+            # Helper to find column index with fallbacks
+            def find_col_idx(col_name, fallbacks, default):
+                if col_name in headers:
+                    return headers.index(col_name)
+                for fallback in fallbacks:
+                    if fallback in headers:
+                        return headers.index(fallback)
+                return default
+
+            topic_idx = find_col_idx("Topic", ["Column 1"], 0)
+            keyword_idx = find_col_idx("Keyword", ["Column 2"], 1)
+            category_idx = find_col_idx("Category", ["Column 3"], 2)
             parent_id_idx = headers.index("Parent Post ID") if "Parent Post ID" in headers else -1
         except ValueError as e:
             logger.error(f"Missing required columns in Google Sheet: {e}")
@@ -186,13 +196,29 @@ class SheetsManager:
             for topic in topics:
                 # Prepare a row matching headers length
                 row_data = [""] * len(headers)
+                
                 if "Topic" in headers:
                     row_data[headers.index("Topic")] = topic
+                elif "Column 1" in headers:
+                    row_data[headers.index("Column 1")] = topic
+                else:
+                    row_data[0] = topic
+                    
                 if "Keyword" in headers:
                     # Use the topic as the keyword for now
                     row_data[headers.index("Keyword")] = topic
+                elif "Column 2" in headers:
+                    row_data[headers.index("Column 2")] = topic
+                else:
+                    row_data[1] = topic
+                    
                 if "Category" in headers:
                     row_data[headers.index("Category")] = category
+                elif "Column 3" in headers:
+                    row_data[headers.index("Column 3")] = category
+                else:
+                    row_data[2] = category
+                    
                 if "Status" in headers:
                     row_data[headers.index("Status")] = "Pending"
                 if "Parent Post ID" in headers:
@@ -219,11 +245,17 @@ class SheetsManager:
                 return []
             
             headers = values[0]
-            if "Topic" not in headers or "Status" not in headers:
+            if "Status" not in headers:
                 return []
                 
-            topic_idx = headers.index("Topic")
             status_idx = headers.index("Status")
+            
+            if "Topic" in headers:
+                topic_idx = headers.index("Topic")
+            elif "Column 1" in headers:
+                topic_idx = headers.index("Column 1")
+            else:
+                topic_idx = 0
             
             processed = []
             for row in values[1:]:
