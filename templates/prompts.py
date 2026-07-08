@@ -157,3 +157,139 @@ Rules:
 3. Only add links if they genuinely add value to the reader.
 4. Return the full, valid HTML. No explanations.
 """
+
+# --- Informational Workflow Prompts ---
+
+INFORMATIONAL_BLUEPRINT_TEMPLATE = """
+Topic: {topic}
+Primary Keyword: {keyword}
+Category: {category}
+
+Your task is to produce a content planning blueprint for the topic above.
+
+Do NOT write any article content.
+Do NOT write any paragraphs.
+Do NOT write any HTML.
+Do NOT write any Markdown.
+Do NOT write FAQs.
+Do NOT write a conclusion.
+
+Produce ONLY the following blueprint fields in plain text.
+Write each field label on one line, followed by the value on the next line.
+Separate each field with a blank line.
+
+SEO Title
+
+Meta Title
+
+Meta Description
+
+Recommended URL Slug
+
+Primary Keyword
+
+Secondary Keywords
+(List 5 to 10 keywords, one per line)
+
+Target Search Intent
+
+Target Audience
+
+Target Word Count
+
+Reader Pain Points
+(List 3 to 5 pain points, one per line)
+
+Reader Goals
+(List 3 to 5 goals, one per line)
+
+Suggested H2 Outline
+(List 8 to 15 H2 section headings in logical order. US audience. EEAT focused. OSHA aware only when directly relevant. No filler headings. No FAQs heading. No Conclusion heading.)
+
+Suggested Tables
+(List any data tables that would improve the article, one per line)
+
+Suggested Checklists
+(List any checklists that would add practical value, one per line)
+
+Suggested Image Locations
+(Briefly describe where images should appear and what each should show, one per line)
+
+Suggested Internal Link Opportunities
+(List anchor text ideas that could link to related articles on the site, one per line)
+
+Suggested External Authority References
+(List authoritative sources that could be referenced, such as OSHA, CDC, or research institutions, one per line)
+
+Suggested EEAT Opportunities
+(List specific ways to demonstrate Experience, Expertise, Authoritativeness, and Trustworthiness in this article, one per line)
+
+Suggested OSHA References
+(Only include this section if OSHA guidance is directly relevant to the topic. Otherwise write: Not applicable.)
+
+Suggested Schema Type
+(Name the most appropriate schema.org type for this article)
+"""
+
+INFORMATIONAL_ARTICLE_TEMPLATE = """
+Topic: {topic}
+Primary Keyword: {keyword}
+Category: {category}
+
+Here is the planning blueprint for this article:
+{blueprint}
+
+Your task is to write a comprehensive, long-form informational article based on the provided topic, keyword, category, and blueprint. The blueprint is your single source of truth for the outline, target audience, pain points, tables, and checklists.
+
+Requirements:
+1. Target Audience: US remote workers, hybrid employees, programmers, and desk professionals.
+2. Length: 3000 to 5000 words. Write highly detailed, exhaustive sections to meet this requirement. Every H2 and H3 section from the blueprint's outline must be fully developed with complete paragraphs and rich, practical information. Do not cut corners or summarize.
+3. Style and Tone: Professional, editorial, authoritative, helpful, and natural (Wirecutter/New York Times style). Avoid robotic transitions, repetitive sentence structures, and generic AI filler. Do not include any AI disclaimers or introductory meta-commentary.
+4. Content Quality: Focus on E-E-A-T and helpful content principles. Avoid fake statistics, fictional experts, fabricated case studies, or emojis. Use OSHA guidance accurately and only when relevant.
+5. Exclusions: Do NOT generate a Conclusion section, FAQ section, Related Articles, Images, Image placeholders, Affiliate buttons, Product sections, Call To Action, Schema, Internal links, External links, or Author box.
+
+Formatting Requirements:
+1. Format the article using clean, semantic HTML5 tags ONLY.
+2. Use only the following HTML tags: <h2>, <h3>, <p>, <ul>, <ol>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>.
+3. Do NOT include <html>, <head>, <body>, CSS, JavaScript, inline styles, or Markdown. Output raw HTML directly.
+"""
+
+INFORMATIONAL_IMAGE_PLAN_TEMPLATE = """
+You are a senior UX content architect, content strategist, and SEO specialist for RemoteProStor.com.
+Your task is to create a detailed Image Plan for the informational article.
+Do NOT generate or call any image APIs. Simply output the plan in clean, readable plain text.
+
+Topic: {topic}
+Primary Keyword: {keyword}
+Category: {category}
+
+Blueprint:
+{blueprint}
+
+Generated Article:
+{article}
+
+Instructions for the Image Plan:
+1. Recommend images ONLY where they genuinely improve reader understanding. Do NOT recommend placing images after every heading. The target number of images is 4 to 8 total.
+2. Structure the response precisely with the following sections in plain text:
+
+--- Image Plan ---
+Overall Recommendation:
+[Number of recommended images]
+Reasoning:
+[Why this number/style fits the topic]
+
+[For every recommended image, repeat this block:]
+Image Number: [Number]
+Purpose: [Explain why this image is needed and what concept it clarifies]
+Placement: [Specify where in the article this image should be inserted]
+Reference Heading: [Name the H2 or H3 heading this image belongs under]
+Image Style: [Choose EXACTLY one of: Hero Photo, Realistic Workspace, Illustration, Diagram, Infographic, Checklist Graphic, Comparison Graphic]
+Aspect Ratio: [Choose EXACTLY one of: 16:9, 1:1]
+Prompt: [Write one extremely detailed, descriptive image generation prompt. It must be tailored for the US audience, highly professional, editorial quality, modern. Absolutely NO text inside the image, NO logos, NO trademarks, NO copyrighted products, NO brand names, NO watermarks. No people looking directly at the camera unless appropriate. High realism unless Illustration/Diagram/Infographic is selected.]
+Alt Text: [Write descriptive, SEO-friendly alternative text]
+Caption: [Write a clear, editorial caption explaining what is depicted]
+--------------------
+"""
+
+

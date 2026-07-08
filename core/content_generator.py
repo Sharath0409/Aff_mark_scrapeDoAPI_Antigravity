@@ -3,14 +3,17 @@ from config.logger import get_logger
 from config import settings
 from utils.retry import get_retry_decorator
 from templates.prompts import (
-    SYSTEM_PROMPT, INTRO_TEMPLATE, REVIEW_TEMPLATE, 
+    SYSTEM_PROMPT, INTRO_TEMPLATE, REVIEW_TEMPLATE,
     COMPARISON_TEMPLATE, FAQ_TEMPLATE, SEO_TAGS_TEMPLATE,
     QUICK_SUMMARY_TEMPLATE, CONCLUSION_TEMPLATE,
-    REVIEWS_HEADER_TEMPLATE
+    REVIEWS_HEADER_TEMPLATE, INFORMATIONAL_BLUEPRINT_TEMPLATE,
+    INFORMATIONAL_ARTICLE_TEMPLATE, INFORMATIONAL_IMAGE_PLAN_TEMPLATE
 )
 from utils.text_cleaner import sanitize_html
 import re
 from bs4 import BeautifulSoup
+from utils.image_optimizer import ImageOptimizer
+from utils.image_uploader import BloggerCDNUploader
 
 logger = get_logger(__name__)
 
@@ -174,3 +177,240 @@ class ContentGenerator:
         ]
         
         return "\n".join(parts)
+
+    def generate_informational_blueprint(self, topic, keyword, category):
+        """Generate a content planning blueprint for an informational article.
+
+        Reuses: self.client (OpenAI), generate_section() (with retry + logging),
+        SYSTEM_PROMPT, and the shared INFORMATIONAL_BLUEPRINT_TEMPLATE.
+        Returns a plain-text blueprint string. Does NOT generate article content.
+        """
+        logger.info(f"Generating informational blueprint for topic: {topic}")
+        prompt = INFORMATIONAL_BLUEPRINT_TEMPLATE.format(
+            topic=topic,
+            keyword=keyword,
+            category=category,
+        )
+        # generate_section() applies SYSTEM_PROMPT, the retry decorator, and logging.
+        # temperature=0.4 chosen for structured, consistent blueprint output.
+        blueprint = self.generate_section(prompt, model="gpt-4o")
+        logger.info("Informational blueprint generation complete.")
+        return blueprint
+
+    def generate_informational_article(self, blueprint, topic, keyword, category):
+        """Generate a complete informational article using the blueprint as source of truth.
+
+        Reuses: self.client (OpenAI), generate_section() (with retry + logging),
+        SYSTEM_PROMPT, and the shared INFORMATIONAL_ARTICLE_TEMPLATE.
+        Returns clean, semantic HTML article. Does NOT generate conclusion, FAQs, or image placeholders.
+        """
+        logger.info(f"Generating informational article for topic: {topic}")
+        prompt = INFORMATIONAL_ARTICLE_TEMPLATE.format(
+            blueprint=blueprint,
+            topic=topic,
+            keyword=keyword,
+            category=category
+        )
+        article = self.generate_section(prompt, model="gpt-4o")
+        logger.info("Informational article generation complete.")
+        return article
+
+    def generate_image_plan(self, blueprint, article, topic, keyword, category):
+        """Generate a structured image plan for the informational article.
+
+        Reuses: self.client (OpenAI), generate_section() (with retry + logging),
+        SYSTEM_PROMPT, and the shared INFORMATIONAL_IMAGE_PLAN_TEMPLATE.
+        Returns a plain-text image plan.
+        """
+        logger.info(f"Generating image plan for topic: {topic}")
+        prompt = INFORMATIONAL_IMAGE_PLAN_TEMPLATE.format(
+            blueprint=blueprint,
+            article=article,
+            topic=topic,
+            keyword=keyword,
+            category=category
+        )
+        image_plan = self.generate_section(prompt, model="gpt-4o")
+        logger.info("Image plan generation complete.")
+        return image_plan
+
+    @get_retry_decorator()
+    def generate_ai_image(self, prompt, size="1024x1024"):
+        """Call OpenAI DALL-E 3 API to generate an image."""
+        logger.info(f"Generating AI image via DALL-E 3 (size: {size})")
+        response = self.client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=size,
+            quality="standard",
+            n=1
+        )
+        return response.data[0].url
+
+    def generate_article_images(self, image_plan, topic):
+        """Read the Image Plan, generate, optimize, and upload each planned image.
+
+        Returns a list of dictionaries representing the Image Manifest.
+        """
+        logger.info("Parsing image plan and starting AI image generation pipeline...")
+        blocks = re.split(r'Image Number:\s*', image_plan)
+        manifest = []
+
+        optimizer = ImageOptimizer()
+        uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
+
+        try:
+            for idx, block in enumerate(blocks[1:], start=1):
+                lines = block.split('\n')
+                fields = {
+                    "image_number": idx,
+                    "purpose": "",
+                    "placement": "",
+                    "reference_heading": "",
+                    "image_style": "",
+                    "aspect_ratio": "",
+                    "prompt": "",
+                    "alt_text": "",
+                    "caption": ""
+                }
+                current_key = None
+                for line in lines:
+                    m = re.match(r'^\s*\*?\*?(Purpose|Placement|Reference Heading|Image Style|Aspect Ratio|Prompt|Alt Text|Caption)\*?\*?\s*:\s*(.*)', line, re.IGNORECASE)
+                    if m:
+                        key = m.group(1).lower().replace(' ', '_')
+                        fields[key] = m.group(2).strip()
+                        current_key = key
+                    elif current_key and line.strip() and not line.startswith('---') and not line.startswith('***') and not line.startswith('==='):
+                        fields[current_key] += " " + line.strip()
+
+                # Aspect ratio to size mapping
+                ratio = fields.get("aspect_ratio", "")
+                if "16:9" in ratio or "16-9" in ratio or "landscape" in ratio.lower():
+                    size = "1792x1024"
+                else:
+                    size = "1024x1024"
+
+                # Generate AI image
+                image_prompt = fields.get("prompt", "").strip()
+                if not image_prompt:
+                    logger.warning(f"No prompt found for image block {idx}, skipping.")
+                    continue
+
+                try:
+                    logger.info(f"Generating AI image for planned image {idx}...")
+                    raw_url = self.generate_ai_image(image_prompt, size=size)
+                    if not raw_url:
+                        logger.error(f"Failed to generate AI image for block {idx}.")
+                        continue
+
+                    # Optimize image
+                    logger.info(f"Optimizing image {idx}...")
+                    title_keyword = f"{topic}-image-{idx}"
+                    temp_path, width, height = optimizer.process_from_url(raw_url, title_keyword)
+                    if not temp_path:
+                        logger.error(f"Failed to optimize image {idx}.")
+                        continue
+
+                    # Upload to GCS CDN
+                    logger.info(f"Uploading image {idx} to GCS...")
+                    cdn_url = uploader.upload_to_google_cdn(temp_path, bucket_name=settings.GCS_BUCKET_NAME)
+                    if not cdn_url:
+                        logger.error(f"Failed to upload image {idx} to GCS CDN.")
+                        continue
+
+                    # Add to manifest
+                    manifest.append({
+                        "image_number": fields.get("image_number", idx),
+                        "placement": fields.get("placement", "").strip(),
+                        "reference_heading": fields.get("reference_heading", "").strip(),
+                        "cdn_url": cdn_url,
+                        "alt_text": fields.get("alt_text", "").strip(),
+                        "caption": fields.get("caption", "").strip(),
+                        "aspect_ratio": fields.get("aspect_ratio", "").strip(),
+                        "width": width,
+                        "height": height
+                    })
+
+                except Exception as e:
+                    logger.error(f"Failed to process planned image {idx}: {e}")
+
+        finally:
+            logger.info("Cleaning up local temporary image files...")
+            optimizer.cleanup()
+
+        return manifest
+
+    def inject_images_into_article(self, article_html, image_manifest):
+        """Assemble the final HTML article by injecting CDN images into planned locations.
+
+        Matches reference headings case-insensitively, ignoring non-alphanumeric characters.
+        Inserts <figure> with <img> and <figcaption> below matching headings or closest sections.
+        """
+        logger.info("Injecting CDN images into article HTML...")
+        soup = BeautifulSoup(article_html, "html.parser")
+        headings = soup.find_all(['h2', 'h3'])
+
+        def clean_text(text):
+            if not text:
+                return ""
+            return re.sub(r'[^a-z0-9]', '', text.lower())
+
+        for img in image_manifest:
+            # Construct semantic figure element
+            figure_tag = soup.new_tag("figure")
+            img_tag = soup.new_tag("img")
+            img_tag["src"] = img.get("cdn_url")
+            img_tag["alt"] = img.get("alt_text", "")
+            img_tag["loading"] = "lazy"
+            img_tag["decoding"] = "async"
+            
+            # Explicit dimensions if available
+            if img.get("width"):
+                img_tag["width"] = img["width"]
+            if img.get("height"):
+                img_tag["height"] = img["height"]
+                
+            figure_tag.append(img_tag)
+
+            if img.get("caption"):
+                caption_tag = soup.new_tag("figcaption")
+                caption_tag.string = img["caption"]
+                figure_tag.append(caption_tag)
+
+            # Locate matching heading
+            target = None
+            cleaned_ref = clean_text(img.get("reference_heading", ""))
+            cleaned_placement = clean_text(img.get("placement", ""))
+
+            # 1. Direct match on reference heading
+            if cleaned_ref:
+                for h in headings:
+                    cleaned_h = clean_text(h.text)
+                    if cleaned_ref in cleaned_h or cleaned_h in cleaned_ref:
+                        target = h
+                        break
+
+            # 2. Substring match on placement text
+            if not target and cleaned_placement:
+                for h in headings:
+                    cleaned_h = clean_text(h.text)
+                    if cleaned_h in cleaned_placement:
+                        target = h
+                        break
+
+            # Insert tag based on match
+            if not target:
+                h2s = soup.find_all('h2')
+                if h2s:
+                    # Append before the next (first available) H2
+                    h2s[0].insert_before(figure_tag)
+                else:
+                    soup.append(figure_tag)
+            else:
+                target.insert_after(figure_tag)
+
+        logger.info("Image injection complete.")
+        return str(soup)
+
+
+
