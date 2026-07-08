@@ -533,11 +533,3 @@ class ContentGenerator:
 
         logger.info("Image injection complete.")
         return str(soup)
-
-
-
-=======
-
-        combined_html = "\n".join(parts)
-        return self._apply_quality_corrections(combined_html, topic, keyword)
->>>>>>> 8342302 (content: automated daily quality correction)
