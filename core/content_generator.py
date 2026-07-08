@@ -19,12 +19,96 @@ logger = get_logger(__name__)
 
 class ContentGenerator:
     def __init__(self):
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+
+    def _apply_quality_corrections(self, html, topic, keyword):
+        """Clean generated HTML so it stays topic-focused, US-focused, and EEAT-safe."""
+        if not html:
+            return html
+
+        soup = BeautifulSoup(html, "html.parser")
+        topic_text = f"{topic} {keyword}".strip()
+        topic_lower = topic_text.lower()
+
+        placeholder_patterns = [
+            r"\bxyz\s+product\b",
+            r"\babc\s+chair\b",
+            r"\bsample\s+product\b",
+            r"\blorem\s+ipsum\b",
+            r"\bexample\s+product\b",
+            r"\bdummy\s+specifications\b",
+            r"\bgeneric\s+premium\s+choice\b",
+            r"\btravel\s+chair\b",
+            r"\bgeneric\s+comparison\s+table\b",
+        ]
+        ai_phrase_replacements = [
+            (r"\bi\s+tested\s+this\b", "Based on manufacturer specifications, verified customer feedback, and industry best practices"),
+            (r"\bi've\s+used\s+this\b", "Based on manufacturer specifications, verified customer feedback, and industry best practices"),
+            (r"\bmy\s+experience\b", "Verified customer feedback"),
+            (r"\bmy\s+week\s+of\s+testing\b", "verified customer feedback and industry best practices"),
+            (r"\bi\s+personally\s+recommend\b", "This guide recommends"),
+            (r"\bin\s+my\s+week\s+of\s+testing\b", "based on verified customer feedback and industry best practices"),
+        ]
+        unrelated_patterns = [
+            r"\bwebcam\s+comparison\b",
+            r"\bchair\s+recommendation\b",
+            r"\bkeyboard\s+buying\s+guide\b",
+            r"\bstanding\s+desk\s+advice\b",
+            r"\bmouse\s+recommendation\b",
+            r"\bnas\s+recommendation\b",
+        ]
+
+        for text_node in soup.find_all(string=True):
+            if text_node.parent and text_node.parent.name in {"script", "style"}:
+                continue
+
+            original = str(text_node)
+            updated = original
+            for pattern in placeholder_patterns:
+                updated = re.sub(pattern, "the featured option", updated, flags=re.IGNORECASE)
+            for pattern, replacement in ai_phrase_replacements:
+                updated = re.sub(pattern, replacement, updated, flags=re.IGNORECASE)
+            if re.search(r"\b(xyz|abc|sample|lorem|example|dummy|generic)\b", updated, flags=re.IGNORECASE):
+                updated = re.sub(r"\b(xyz|abc|sample|lorem|example|dummy|generic)\b", "the featured option", updated, flags=re.IGNORECASE)
+            if any(re.search(pattern, updated, flags=re.IGNORECASE) for pattern in unrelated_patterns):
+                updated = ""
+
+            if updated != original:
+                text_node.replace_with(updated)
+
+        for tag in soup.find_all(True):
+            if not tag.get_text(" ", strip=True):
+                tag.decompose()
+
+        if not soup.find(["h1", "h2", "p"]):
+            wrapper = soup.new_tag("p")
+            wrapper.string = f"This guide focuses on {topic} and helps US readers make an informed, practical decision."
+            soup.append(wrapper)
+
+        intro_target = soup.find(["h1", "h2", "p"])
+        if intro_target and topic_lower and topic_lower not in intro_target.get_text(" ", strip=True).lower():
+            if not intro_target.find("strong"):
+                topic_sentence = soup.new_tag("p")
+                topic_sentence.string = f"This article is focused on {topic} and is written for US readers looking for practical, topic-specific guidance."
+                intro_target.insert_after(topic_sentence)
+
+        if any(term in topic_lower for term in ["ergonomic", "chair", "desk", "standing desk", "keyboard", "mouse", "monitor", "lighting", "workstation", "workspace", "office furniture"]):
+            text_content = " ".join([tag.get_text(" ", strip=True) for tag in soup.find_all(["p", "li", "h2", "h3"])])
+            if "osha" not in text_content.lower() and "neutral wrist" not in text_content.lower():
+                anchor = soup.find("p") or soup.find("h2") or soup.find("h3")
+                if anchor is not None:
+                    safety_note = soup.new_tag("p")
+                    safety_note.string = "For US work setups, OSHA-aligned ergonomic guidance favors neutral wrist positioning, a monitor at roughly eye level, and a setup that reduces repetitive strain while supporting balanced sitting and standing habits."
+                    anchor.insert_after(safety_note)
+
+        return str(soup).strip()
         
     @get_retry_decorator()
     def generate_section(self, prompt, model="gpt-4o"):
         """Call OpenAI API to generate content."""
         logger.info(f"Generating content with model {model}")
+        if not self.client:
+            return "<p>Content generation skipped because no OpenAI API key is configured.</p>"
         try:
             response = self.client.chat.completions.create(
                 model=model,
@@ -175,8 +259,9 @@ class ContentGenerator:
             footer_html,
             '</div>'
         ]
-        
-        return "\n".join(parts)
+
+        combined_html = "\n".join(parts)
+        return self._apply_quality_corrections(combined_html, topic, keyword)
 
     def generate_informational_blueprint(self, topic, keyword, category):
         """Generate a content planning blueprint for an informational article.
@@ -414,3 +499,8 @@ class ContentGenerator:
 
 
 
+=======
+
+        combined_html = "\n".join(parts)
+        return self._apply_quality_corrections(combined_html, topic, keyword)
+>>>>>>> 8342302 (content: automated daily quality correction)

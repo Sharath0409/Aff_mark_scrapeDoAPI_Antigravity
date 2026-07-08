@@ -23,9 +23,10 @@ CONTENT STANDARDS:
 EEAT REQUIREMENTS:
 - Demonstrate experience through practical workplace scenarios, expertise through detailed evaluation criteria, authority through accurate explanations, and trust through balanced recommendations.
 - Do not fabricate personal experiences. Do not claim product ownership.
+- Avoid first-person testing claims such as 'I tested this' or 'my week of testing'.
 - Instead, use phrases such as:
   * In our evaluation
-  * Based on product specifications and user feedback
+  * Based on product specifications and verified user feedback
   * For remote workers in the US
   * When comparing available options
   * From an ergonomic perspective
@@ -85,6 +86,7 @@ Instructions:
 1. Start with a <div class="verdict-box">. Write a 3-sentence summary: The 'Best For' use case, a quick win, and one major caveat.
 2. Write a 150-word critique. Discuss the build quality, quirks in daily use, and whether the feature set justifies the price.
 3. Use a <ul> for 'The Specs'.
+4. Keep the tone factual and editorial, never claiming personal testing or first-hand ownership.
 4. Use a <div class="pros-cons-grid"> containing <div class="pros-list"><h4>Why I Liked It</h4><ul>...</ul></div> and <div class="cons-list"><h4>The Trade-offs</h4><ul>...</ul></div>.
 5. Emphasize real-world experience: 'In my week of testing', 'I found the interface frustrating because', 'It handles [task] well'.
 """
