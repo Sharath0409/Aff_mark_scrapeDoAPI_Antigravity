@@ -225,25 +225,38 @@ class ContentGenerator:
         </style>
         """
         
+        # Helper for generating context blocks to maintain consistency
+        products_summary = "\n".join([f"- {p['title']} | {p['price']} | {p['rating']} | URL: {p.get('url', '#')}" for p in products])
+        
+        def build_context(intro="", qs="", comp=""):
+            ctx = f"Current Article Context\nArticle Topic: {topic}\nPrimary Keyword: {keyword}\nProducts Reviewed:\n{products_summary}\n\nPreviously Generated Sections:\n"
+            if intro: ctx += f"Summary of Introduction:\n{intro}\n\n"
+            if qs: ctx += f"Summary of Bottom Line:\n{qs}\n\n"
+            if comp: ctx += f"Summary of Comparison:\n{comp}\n\n"
+            if not intro and not qs and not comp: ctx += "(None yet)\n\n"
+            ctx += "This context is read-only. The LLM must use it only to maintain consistency, avoid duplicating information, and ensure no hallucinated products or contradictory advice are added.\n\n=========================\n"
+            return ctx
+        
         # 1. Intro
-        intro_prompt = INTRO_TEMPLATE.format(topic=topic, keyword=keyword)
+        intro_prompt = build_context() + INTRO_TEMPLATE.format(topic=topic, keyword=keyword)
         intro_html = self.generate_section(intro_prompt, model="gpt-4o-mini")
         
         # 2. Quick Summary (New)
-        qs_prompt = QUICK_SUMMARY_TEMPLATE.format(topic=topic)
-        qs_html = f'<div class="quick-summary-box">{self.generate_section(qs_prompt, model="gpt-4o-mini")}</div>'
+        qs_prompt = build_context(intro=intro_html) + QUICK_SUMMARY_TEMPLATE.format(topic=topic)
+        qs_raw = self.generate_section(qs_prompt, model="gpt-4o-mini")
+        qs_html = f'<div class="quick-summary-box">{qs_raw}</div>'
         
         # 3. Comparison Table (Moved Up)
-        products_summary = "\n".join([f"- {p['title']} | {p['price']} | {p['rating']} | URL: {p.get('url', '#')}" for p in products])
-        comparison_prompt = COMPARISON_TEMPLATE + f"\n\nHere are the products:\n{products_summary}"
-        comparison_html = f'<div class="comparison-table-wrapper">{self.generate_section(comparison_prompt, model="gpt-4o")}</div>'
+        comparison_prompt = build_context(intro=intro_html, qs=qs_raw) + COMPARISON_TEMPLATE + f"\n\nHere are the products:\n{products_summary}"
+        comparison_raw = self.generate_section(comparison_prompt, model="gpt-4o")
+        comparison_html = f'<div class="comparison-table-wrapper">{comparison_raw}</div>'
         
         # 4. Detailed Reviews
-        rh_prompt = REVIEWS_HEADER_TEMPLATE
+        rh_prompt = build_context(intro=intro_html, qs=qs_raw, comp=comparison_raw) + REVIEWS_HEADER_TEMPLATE
         reviews_header = self.generate_section(rh_prompt, model="gpt-4o-mini")
         reviews_html = f"<h2>{reviews_header}</h2>"
         for p in products:
-            r_prompt = REVIEW_TEMPLATE.format(
+            r_prompt = build_context(qs=qs_raw) + REVIEW_TEMPLATE.format(
                 title=p['title'], price=p['price'], 
                 rating=p['rating'], review_count=p['review_count'], 
                 features=p['features']
@@ -273,11 +286,11 @@ class ContentGenerator:
             """
             
         # 5. FAQ Section
-        faq_prompt = FAQ_TEMPLATE.format(topic=topic)
+        faq_prompt = build_context(qs=qs_raw, comp=comparison_raw) + FAQ_TEMPLATE.format(topic=topic)
         faq_html = self.generate_section(faq_prompt, model='gpt-4o-mini')
         
         # 6. Conclusion
-        conc_prompt = CONCLUSION_TEMPLATE.format(topic=topic)
+        conc_prompt = build_context(qs=qs_raw) + CONCLUSION_TEMPLATE.format(topic=topic)
         conc_html = self.generate_section(conc_prompt, model='gpt-4o-mini')
         
         # 7. Footer

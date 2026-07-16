@@ -59,14 +59,75 @@ Ensure the content is useful for a US reader, is more useful than competing affi
 INTERNAL LINKING:
 Naturally recommend related article opportunities throughout the content.
 
-Prioritize originality, practical value, and trustworthiness over content length. Never generate content solely to fill word count."""
+Prioritize originality, practical value, and trustworthiness over content length. Never generate content solely to fill word count.
+
+==========================================================
+GLOBAL QUALITY POLICY (APPLIES TO EVERY SECTION)
+==========================================================
+
+Every generated article must be:
+- 100% topic focused
+- 100% internally consistent
+- US focused
+- Google Helpful Content compliant
+- EEAT compliant
+- Editorial quality
+- Human sounding
+- Trustworthy
+- Affiliate friendly
+- OSHA aware where applicable
+- Publication ready
+
+GLOBAL TOPIC CONSISTENCY:
+Determine the primary topic before generating any section. Every generated section must remain inside that topic. Never allow cross-category leakage. (e.g., in a Bluetooth Mouse article, never mention office chairs, standing desks, keyboards, webcams, or UPS. In a Monitor article, never recommend a mouse, chair, or keyboard). Every section must support the same topic.
+
+GLOBAL PRODUCT VALIDATION:
+Only discuss products supplied to the current generation request. Never introduce placeholder products, products from previous generations, hallucinated products, fictional products, or dummy names. If a product was not supplied, it must never appear.
+
+GLOBAL TRUST POLICY:
+Never fabricate personal experience, ownership, testing, ratings, review counts, technical specifications, performance numbers, dimensions, certifications, medical claims, OSHA approvals, or industry awards. Only use supplied data and generally accepted workplace best practices.
+
+GLOBAL WRITING POLICY:
+Write like a senior US editorial team. Be professional, balanced, helpful, conversational, and natural. Avoid AI repetition, marketing hype, keyword stuffing, generic filler, and robotic wording. Every paragraph should help readers make a better buying decision.
+
+GLOBAL EEAT POLICY:
+Demonstrate expertise through objective evaluation, clear buying guidance, feature analysis, practical workplace advice, and comparison logic. Never demonstrate expertise through fabricated experience.
+
+GLOBAL OSHA POLICY:
+Whenever ergonomics are relevant, naturally include OSHA-aligned workplace best practices (e.g., neutral wrist posture, proper desk height, monitor positioning, comfortable seating, standing/sitting balance). Never imply OSHA certification or approval.
+
+GLOBAL SEO POLICY:
+Write for humans first. Naturally include keywords. Avoid keyword stuffing. Encourage long-form engagement. Support internal linking naturally.
+
+GLOBAL HTML POLICY:
+Never generate invalid HTML. Preserve expected HTML structure. Never modify CSS classes expected by the pipeline.
+
+GLOBAL VALIDATION:
+Before returning ANY generated section verify:
+1. Topic consistency
+2. Product consistency
+3. No hallucinations
+4. No placeholders
+5. No fake experience
+6. No duplicate content
+7. US focused
+8. EEAT compliant
+9. Helpful Content compliant
+If validation fails, automatically regenerate that section until validation succeeds."""
 
 
 INTRO_TEMPLATE = """
-Write an H1 and a short intro for a guide on '{topic}'.
-I hook the reader by addressing a common, frustrating pain point related to '{keyword}'.
-I demonstrate my expertise by explaining why people struggle with this category and how I solved it.
-I keep the tone conversational and practical, avoiding generic filler like "In today's fast-paced world."
+Write an H1 and a highly engaging, trustworthy, editorial-quality introduction (2-4 paragraphs) for a guide on '{topic}'.
+
+Instructions:
+1. Opening Structure: Naturally address a common, frustrating pain point related to '{keyword}'. Explain why choosing the right product matters, highlight common buyer mistakes, briefly outline the evaluation criteria, and state exactly what the reader will learn.
+2. Strict EEAT Rules: Establish authority using neutral editorial language (e.g., "Choosing the right product can be challenging...", "Based on manufacturer specifications, verified customer feedback, and practical workplace considerations"). NEVER pretend to have personally used or tested the products. Do NOT write "I tested," "I solved this problem," "My experience," "I've been using," or "I recommend because I own."
+3. US Focus: Write for US remote workers, US home office users, freelancers, knowledge workers, and small business professionals. Use American English, US buying expectations, and US workplace terminology.
+4. OSHA Alignment: If the topic involves ergonomics, briefly explain why proper equipment matters (e.g., neutral wrist position, repetitive strain reduction, proper workstation posture, eye-level monitor positioning). Only include this when naturally relevant.
+5. Trust Rules: Never invent statistics, medical claims, performance numbers, OSHA certifications, awards, review counts, or research findings. Only make claims supported by supplied data or generally accepted workplace best practices.
+6. Topic Consistency: Every sentence must support the '{topic}'. Never mention products outside the current article category.
+7. Writing Style & SEO: Professional, editorial, helpful, conversational, human, and trustworthy. Avoid AI-sounding phrases, keyword stuffing, marketing hype, generic filler (like "In today's fast-paced world"), and repetitive wording. Naturally include the primary keyword '{keyword}', but write for humans first.
+8. Validation: Before returning the introduction verify: 1) No fake personal experience is claimed, 2) No hallucinated claims exist, 3) No unrelated products are mentioned, 4) The content is US-focused, 5) Topic consistency is 100%, 6) The text is Helpful Content compliant. If validation fails, regenerate until it passes.
 """
 
 REVIEWS_HEADER_TEMPLATE = """
@@ -76,50 +137,87 @@ Return ONLY the text.
 """
 
 REVIEW_TEMPLATE = """
-Write an in-depth, first-person review for:
+Write an in-depth, professional editorial product review for:
 Title: {title}
 Price: {price}
 Rating: {rating} ({review_count} reviews)
 Features: {features}
 
 Instructions:
-1. Start with a <div class="verdict-box">. Write a 3-sentence summary: The 'Best For' use case, a quick win, and one major caveat.
-2. Write a 150-word critique. Discuss the build quality, quirks in daily use, and whether the feature set justifies the price.
-3. Use a <ul> for 'The Specs'.
-4. Keep the tone factual and editorial, never claiming personal testing or first-hand ownership.
-4. Use a <div class="pros-cons-grid"> containing <div class="pros-list"><h4>Why I Liked It</h4><ul>...</ul></div> and <div class="cons-list"><h4>The Trade-offs</h4><ul>...</ul></div>.
-5. Emphasize real-world experience: 'In my week of testing', 'I found the interface frustrating because', 'It handles [task] well'.
+1. Start with a <div class="verdict-box">. Write a 3-sentence summary: The 'Best For' use case, a quick win, and one major caveat based on available specifications.
+2. Write a 150-word analysis. Evaluate the product using supplied information, manufacturer specifications, verified customer feedback, common real-world usage scenarios, and workplace productivity best practices.
+3. Use a <ul> for 'The Specs'. Do not invent specifications; use only provided facts.
+4. Use a <div class="pros-cons-grid"> containing <div class="pros-list"><h4>Pros</h4><ul>...</ul></div> and <div class="cons-list"><h4>Cons</h4><ul>...</ul></div>.
+5. Tone & Trust: Write like a senior US editorial reviewer using neutral wording (e.g., "Based on available specifications," "For most US remote workers," "When comparing similar products"). NEVER fabricate personal experience (e.g., do NOT use "In my week of testing," "I tested," "I found," "After using," or "I personally recommend"). Do NOT invent facts, ratings, review counts, battery life, dimensions, compatibility, performance, certifications, OSHA approval, or medical claims.
+6. Context Rules: Discuss ONLY the supplied product. Do not mention products from previous articles, placeholder products, or deviate from the article topic.
+7. Ergonomics: If evaluating an ergonomic product (mouse, keyboard, chair, desk, monitor arm, lighting, standing desk, footrest, workstation accessories), incorporate OSHA-aligned ergonomic best practices (e.g., neutral wrist position, reduced repetitive strain, comfortable long-session use, proper hand positioning, avoid excessive wrist extension) where naturally appropriate. Do NOT claim OSHA certification.
 """
 
 COMPARISON_TEMPLATE = """
 Start with an H2 heading: 'At a Glance: How They Compare'.
-Generate a clean, transposed HTML comparison table.
-- Use <table class="comparison-table">.
-- Include 6-8 relevant technical rows (e.g., Battery Life, Weight, Build Material, Real-world Performance).
-- Always include 'Price' and 'My Verdict' rows.
-- The last row must be 'Verdict' with a button-styled link: <a href="link" class="btn">Check Current Price</a>.
+Generate a highly accurate, trustworthy, easy-to-read, transposed HTML comparison table comparing ONLY the products supplied.
+
+Instructions:
+1. Strict Product Validation: ONLY compare products supplied in this article. NEVER introduce products from previous articles, placeholder products, hallucinated products, or dummy products. NEVER compare products outside the article category (e.g., no standing desks in a mouse article).
+2. Attribute Selection: Generate comparison rows ONLY from information available in the supplied product data. Only include attributes relevant to the product category (e.g., Connectivity, Battery Life, Weight, Dimensions, Material). NEVER force irrelevant rows.
+3. No Hallucination: NEVER invent specifications, dimensions, weights, battery life, compatibility, performance, certifications, or technical details. If an attribute is unavailable, omit that row. Never guess.
+4. No Duplicates: Every comparison row must be unique. No repeated attributes (e.g., no multiple "Weight" or "Battery" rows).
+5. Verdict Row: Generate a 'Verdict' row (e.g., Best Overall, Best Budget, Best Specialized Choice) ONLY if supported by the reviewed products. The verdict must reference products already discussed. Never invent new recommendations.
+6. Price Handling: If current pricing is available from the supplied data, display it. If pricing is unavailable, display "Check Current Price". NEVER invent prices.
+7. HTML Requirements: Preserve existing HTML structure. Use <table class="comparison-table">. The last row must be 'Verdict' with a button-styled link: <a href="link" class="btn">Check Current Price</a>. Do not change CSS classes, button styling, or layout.
+8. US Focus & Readability: Write for US buyers in American English, highlighting differences important to remote workers, home office users, freelancers, and knowledge workers. Keep rows concise, avoid unnecessary technical jargon, and highlight practical buying differences.
+9. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%. If validation fails, automatically regenerate until it succeeds.
 """
 
 FAQ_TEMPLATE = """
+Topic: {topic}
+
 Start with an H2: 'Frequently Asked Questions'.
-Answer 3 common, specific questions about '{topic}' that a buyer would actually ask in a store.
-Answers should be concise, helpful, and based on expert insight. Use Schema.org JSON-LD for the FAQ block.
+Generate a highly relevant FAQ section that answers only the most important buyer questions related to the current article topic to improve reader confidence and support SEO.
+
+Instructions:
+1. Strict Topic Rules: Every FAQ question must relate ONLY to the article topic ({topic}). Never generate unrelated questions. (e.g., no office chair questions in a mouse article).
+2. Question Generation Rules: Generate exactly three FAQs. Questions must represent real buyer concerns relevant to the product category (prefer questions about compatibility, setup, ergonomics, daily usage, maintenance, battery, connectivity, product selection, workspace productivity, or long-term usability).
+3. Trust Rules & EEAT Requirements: Answers should be accurate, balanced, helpful, practical, and objective. Never invent compatibility, technical specifications, battery life, performance, medical benefits, OSHA certifications, or manufacturer policies. Return only information supported by supplied product information, manufacturer specifications, or widely accepted best practices. Never pretend first-hand experience. Avoid marketing language and exaggerated claims.
+4. US Focus: Write for US readers in American English. Reference US work environments where appropriate and use terminology familiar to US buyers.
+5. Ergonomic Guidance: When the article is about ergonomic products, include OSHA-aligned ergonomic guidance where appropriate (e.g., neutral wrist position, proper desk height, monitor positioning, comfortable long-session usage). Avoid medical claims and NEVER imply OSHA approval.
+6. Readability & SEO: Answer directly. Keep each answer concise (approximately 70-120 words). Avoid filler and do not repeat content already explained in the article. Naturally include important related keywords without keyword stuffing. Generate questions users genuinely search for.
+7. JSON-LD: Continue generating Schema.org FAQPage JSON-LD. Do not modify schema structure.
+8. Validation: Before returning the FAQ verify: 1) Exactly three questions exist, 2) Every question belongs to the article topic, 3) No unrelated products are mentioned, 4) No hallucinated facts or fake compatibility claims, 5) US focused, 6) EEAT compliant. If validation fails, automatically regenerate until it succeeds.
 """
 
 QUICK_SUMMARY_TEMPLATE = """
+Topic: {topic}
+
 Start with an H2: 'The Bottom Line'.
-I provide a concise summary:
-1. The Best All-Rounder.
-2. The Best Value/Budget pick.
-3. The Specialist Choice (e.g., best for travel/performance).
-Use a simple HTML list. Explain the 'why' in one short sentence per item.
+Generate a highly accurate summary of ONLY the products supplied to you for this article.
+
+Instructions:
+1. Provide a concise summary choosing: The Best Overall, The Best Value/Budget pick, and The Specialist Choice.
+2. Use a simple HTML list (<ul> with <li>). Explain the 'why' in one short, helpful, human-sounding sentence per item referencing actual supplied features.
+3. Strict Product Rules: Recommendations MUST be selected ONLY from the supplied product list. Never invent products. Never use placeholder products. Never reuse products from previous generations. Never recommend products from another category. If only three products are supplied, the recommendations MUST come ONLY from those three.
+4. Category Consistency: Every recommendation must belong to the article topic ({topic}). 
+5. Trust Rules: Never invent ratings, awards, performance, specifications, certifications, battery life, or compatibility. If information is unavailable, do not invent it. Never fabricate reasons.
+6. Writing Style: Professional, US editorial tone, concise, helpful. No marketing hype. No filler.
+7. Validation: Before returning the section verify: 1) Every recommended product exists in the supplied data, 2) Every recommendation belongs to the article topic, 3) No placeholder products exist, 4) No unrelated category exists, 5) No hallucinated product names exist.
 """
 
 CONCLUSION_TEMPLATE = """
+Topic: {topic}
+
 Start with an H2: 'Final Thoughts'.
-I give a final, decisive recommendation based on the user's potential needs.
-Help them make a final choice: 'If you prioritize X, buy Y. If you just want to save money, buy Z.'
-End with a supportive, human closing.
+Write a highly trustworthy editorial conclusion that helps readers confidently choose among ONLY the products supplied in this article.
+
+Instructions:
+1. Final Recommendation Logic: Provide a practical recommendation based on different reader needs (e.g., Best Overall, Best Budget, Best Ergonomics) naturally supported by the supplied products. Help them make a final choice (e.g., 'If you prioritize X, buy Y. If you want to save money, buy Z.').
+2. Strict Context Rules: You may ONLY discuss and recommend products included in the supplied data for this article. Never recommend products from previous articles, placeholder products, or products from unrelated categories. If only three products were supplied, recommend ONLY those three.
+3. EEAT Requirements: Base recommendations on manufacturer specifications, verified customer feedback, practical workplace considerations, and objective feature comparison. NEVER claim "I tested", "I used", "My experience", "I personally recommend", or "My favorite". Use neutral editorial language.
+4. US Focus: Write specifically for US readers, referencing US remote work, US home offices, US productivity, and US buying decisions in American English.
+5. OSHA Alignment: When ergonomics are relevant to the {topic}, briefly reinforce OSHA-aligned ergonomic best practices (e.g., neutral wrist position, proper sitting posture, comfortable long-session use, reduced repetitive strain). Do not force this if unrelated.
+6. Trust Rules: Never invent ratings, review counts, prices, specifications, certifications, performance, or medical claims. Only discuss verified information.
+7. Writing Style: Professional, balanced, helpful, confident, and human. No hype, no fluff, no AI repetition.
+8. Ending: Finish with a short, encouraging closing focused on choosing the product that best fits the reader's workflow and budget. Do NOT use generic motivational phrases.
+9. Validation: Before returning the conclusion verify: 1) Every product mentioned exists in the supplied data for this article, 2) No unrelated or placeholder products exist, 3) No hallucinated recommendations exist, 4) Topic consistency is 100%. If validation fails, regenerate until it passes.
 """
 
 SEO_TAGS_TEMPLATE = """
