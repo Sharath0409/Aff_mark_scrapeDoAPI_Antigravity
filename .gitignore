@@ -8,3 +8,8 @@ test_output.html
 test_pipeline.py
 get_blogger_token.py
 blog_preview.md
+
+# Audit tool — local ephemeral files
+audit_state.json
+audit_reports/
+temp_processing/
