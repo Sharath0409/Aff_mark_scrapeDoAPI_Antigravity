@@ -1,0 +1,54 @@
+name: Site Audit & Monetization Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (audit only, no Blogger updates)?'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6-hour hard limit (122 posts @ ~90s each = ~3hrs max)
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Site Audit & Fix
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+          AUDIT_ARTIFACTS_DIR: audit_reports
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            python audit_posts.py --dry-run
+          else
+            python audit_posts.py
+          fi
+
+      - name: Upload Audit Reports
+        if: always()  # Upload even if some posts failed
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports
+          path: audit_reports/
+          retention-days: 30
