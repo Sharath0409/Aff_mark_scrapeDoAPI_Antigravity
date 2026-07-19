@@ -8,6 +8,32 @@ from templates.prompts import INTERNAL_LINK_RELEVANCE_PROMPT, CONTEXTUAL_LINK_IN
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_indices_from_response(content: str) -> List[int]:
+    """Extract article indices from AI response.
+    
+    Expects a JSON array like [0, 2, 5] or space/comma separated numbers.
+    """
+    # First try to parse as JSON array
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, list):
+            return [int(i) for i in parsed if isinstance(i, (int, str)) and str(i).isdigit()]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    
+    # Fallback: look for array-like pattern [0, 1, 2] or (0, 1, 2)
+    array_match = re.search(r'[\[\(]\s*(\d+(?:\s*[,\s]\s*\d+)*)\s*[\]\)]', content)
+    if array_match:
+        return [int(x.strip()) for x in re.split(r'[,\s]+', array_match.group(1)) if x.strip()]
+    
+    # Last resort: find standalone numbers (but this is fragile)
+    # Only use if the response looks like just a list of numbers
+    numbers = [int(i) for i in re.findall(r'\b\d+\b', content)]
+    # Filter to reasonable indices (0-499 for max 500 posts)
+    return [n for n in numbers if 0 <= n < 500]
+
+
 class InternalLinkManager:
     def __init__(self, publisher):
         self.publisher = publisher
@@ -57,8 +83,8 @@ class InternalLinkManager:
             
             content = response.choices[0].message.content
             
-            # Extract indices from AI response
-            indices = [int(i) for i in re.findall(r'\d+', content)]
+            # Extract indices from AI response using robust parser
+            indices = _extract_indices_from_response(content)
             
             selected = []
             seen_urls = set()

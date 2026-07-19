@@ -89,7 +89,7 @@ def _strip_code_fences(text: str) -> str:
     return cleaned
 
 
-def review_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict) -> bool:
+def review_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict, model: str = "deepseek-v4-flash") -> bool:
     """Review a single post for drift and update it on Blogger if needed.
 
     Returns True if the post was processed (updated or marked reviewed), False on error.
@@ -114,7 +114,7 @@ def review_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
     prompt = REVIEW_DRIFT_PROMPT.format(topic=topic, keyword=keyword, html_content=content)
     try:
         response = generator.client.chat.completions.create(
-            model="deepseek-v4-flash",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             response_format={"type": "json_object"},
@@ -178,12 +178,12 @@ def review_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
         return False
 
 
-def run_review(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, count: int = 2) -> int:
+def run_review(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, count: int = 2, model: str = "deepseek-v4-flash") -> int:
     """Select and review up to `count` posts. Returns number of posts processed."""
     selected = select_posts_for_review(publisher, count=count)
     processed = 0
     for post in selected:
-        if review_post(publisher, generator, sheets, post):
+        if review_post(publisher, generator, sheets, post, model=model):
             processed += 1
     logger.info(f"Daily review complete. Processed {processed}/{len(selected)} selected posts.")
     return processed

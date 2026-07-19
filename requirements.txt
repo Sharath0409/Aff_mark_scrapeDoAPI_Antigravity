@@ -8,3 +8,5 @@ requests
 tenacity
 google-cloud-storage
 tabulate
+pytest
+pytest-mock

@@ -16,6 +16,7 @@ class AmazonScraper:
         self.scrape_do_token = settings.SCRAPE_DO_TOKEN
         self.base_url = "http://api.scrape.do"
         
+    @get_retry_decorator()
     def _fetch_via_scraped(self, target_url):
         if not self.scrape_do_token or self.scrape_do_token == "your_scrape_do_token":
             logger.warning("Scrape.do token not set. Skipping real request.")

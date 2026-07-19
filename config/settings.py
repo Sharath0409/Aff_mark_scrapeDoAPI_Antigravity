@@ -1,3 +1,4 @@
+"""Configuration settings with validation."""
 import os
 from dotenv import load_dotenv
 
@@ -23,6 +24,13 @@ REQUIRED_SETTINGS = [
     "GOOGLE_SHEET_ID", "BLOGGER_BLOG_ID", "GCS_BUCKET_NAME"
 ]
 
-for setting in REQUIRED_SETTINGS:
-    if not globals().get(setting):
-        print(f"WARNING: Missing required environment variable: {setting}")
+# Check if running in production (not test)
+IS_TEST = os.getenv("PYTEST_CURRENT_TEST") is not None or os.getenv("KILO_TEST_MODE") == "1"
+
+missing = [s for s in REQUIRED_SETTINGS if not globals().get(s)]
+
+if missing:
+    if IS_TEST:
+        print(f"WARNING (test mode): Missing required environment variables: {', '.join(missing)}")
+    else:
+        raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}. Set them in your environment or .env file.")

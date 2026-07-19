@@ -30,7 +30,7 @@ from core.blogger_publisher import BloggerPublisher
 from core.content_generator import ContentGenerator
 from core.scraper import AmazonScraper
 from core.sheets_manager import SheetsManager
-from core.post_product_expander import find_posts_under_5, expand_post
+from core.post_product_expander import find_posts_under_5, expand_post, run_expand
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,19 +54,14 @@ def main():
     try:
         publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
         generator = ContentGenerator()
-        scraper = AmazonScraper()
         sheets = SheetsManager(settings.GOOGLE_SHEET_ID, settings.GCP_SERVICE_ACCOUNT)
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
         sys.exit(1)
 
     if args.apply:
-        processed = 0
-        selected = find_posts_under_5(publisher, sheets, count=args.count)
-        for post in selected:
-            if expand_post(publisher, generator, scraper, sheets, post):
-                processed += 1
-        logger.info(f"Daily expand complete. Processed {processed}/{len(selected)} selected posts.")
+        processed = run_expand(publisher, generator, sheets, count=args.count)
+        logger.info(f"Daily expand complete. Processed {processed} post(s).")
     else:
         # Dry run: just report which posts would be selected
         selected = find_posts_under_5(publisher, sheets, count=args.count)

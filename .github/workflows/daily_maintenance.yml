@@ -1,4 +1,4 @@
-name: Daily Maintenance (Review + Expand)
+name: Daily Maintenance (Review + Expand + Cannibalization)
 
 on:
   schedule:
@@ -6,6 +6,8 @@ on:
     - cron: '30 12 * * *'
     # Expand job: 13:00 UTC (18:30 IST) - 1 hour after publisher
     - cron: '0 13 * * *'
+    # Cannibalization audit: Weekly on Sunday 14:00 UTC (19:30 IST)
+    - cron: '0 14 * * 0'
   workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
@@ -67,3 +69,38 @@ jobs:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
         run: python scripts/expand_old_posts.py --apply
+
+  cannibalize:
+    name: Cannibalization Audit (Weekly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 14 * * 0'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Cannibalization Audit
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: python scripts/check_cannibalization.py --blog-id ${{ secrets.BLOGGER_BLOG_ID }} --output cannibalization_report.json --threshold 0.65
+
+      - name: Upload Cannibalization Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cannibalization-report
+          path: cannibalization_report.json
+          retention-days: 30

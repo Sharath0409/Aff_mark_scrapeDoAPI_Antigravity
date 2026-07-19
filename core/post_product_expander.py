@@ -43,7 +43,7 @@ def _extract_asin_from_url(url: str) -> Optional[str]:
 
 def _get_existing_asins(html_content: str) -> set:
     """Extract ASINs from existing product sections in the HTML."""
-    asins = set()
+    asins: set = set()
     soup = BeautifulSoup(html_content, 'html.parser')
     # Find all buy buttons with Amazon URLs
     for link in soup.find_all('a', href=True):
@@ -231,8 +231,17 @@ def _inject_product_sections(html_content: str, new_products: List[Dict], genera
     return str(soup)
 
 
-def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict) -> bool:
-    """Expand a single post to have 5 products."""
+def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict, optimizer: ImageOptimizer = None, uploader: BloggerCDNUploader = None) -> bool:
+    """Expand a single post to have 5 products.
+    
+    Args:
+        publisher: Blogger publisher instance
+        generator: Content generator instance
+        sheets: Sheets manager instance
+        post: Post dictionary with id, title, labels
+        optimizer: Optional ImageOptimizer instance (creates new if not provided)
+        uploader: Optional BloggerCDNUploader instance (creates new if not provided)
+    """
     post_id = post.get("id")
     title = post.get("title", "Untitled")
     if not post_id:
@@ -280,23 +289,26 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
         logger.warning(f"No new products found for '{title}'. Skipping.")
         return False
 
-    # Process images for new products
-    optimizer = ImageOptimizer()
-    uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
+    # Process images for new products - use provided instances or create new ones
+    local_optimizer = optimizer or ImageOptimizer()
+    local_uploader = uploader or BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
     
-    for product in new_products:
-        raw_image_url = product.get('image_url')
-        if raw_image_url:
-            logger.info(f"Processing image for: {product.get('title')}")
-            temp_webp, img_w, img_h = optimizer.process_from_url(raw_image_url, product.get('title', 'product'))
-            if temp_webp:
-                cdn_url = uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
-                if cdn_url:
-                    product['image_url'] = cdn_url
-                    product['image_width'] = img_w
-                    product['image_height'] = img_h
-    
-    optimizer.cleanup()
+    try:
+        for product in new_products:
+            raw_image_url = product.get('image_url')
+            if raw_image_url:
+                logger.info(f"Processing image for: {product.get('title')}")
+                temp_webp, img_w, img_h = local_optimizer.process_from_url(raw_image_url, product.get('title', 'product'))
+                if temp_webp:
+                    cdn_url = local_uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
+                    if cdn_url:
+                        product['image_url'] = cdn_url
+                        product['image_width'] = img_w
+                        product['image_height'] = img_h
+    finally:
+        # Only cleanup if we created our own optimizer
+        if optimizer is None:
+            local_optimizer.cleanup()
 
     # Inject new product sections
     updated_html = _inject_product_sections(content, new_products, generator, topic, keyword)
@@ -327,12 +339,21 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
         return False
 
 
-def run_expand(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, count: int = 2) -> int:
+def run_expand(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, count: int = 2, optimizer: ImageOptimizer = None, uploader: BloggerCDNUploader = None) -> int:
     """Find and expand up to `count` posts. Returns number of posts processed."""
     selected = find_posts_under_5(publisher, sheets, count=count)
     processed = 0
-    for post in selected:
-        if expand_post(publisher, generator, sheets, post):
-            processed += 1
+    # Create shared optimizer/uploader if not provided
+    local_optimizer = optimizer or ImageOptimizer()
+    local_uploader = uploader or BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
+    
+    try:
+        for post in selected:
+            if expand_post(publisher, generator, sheets, post, local_optimizer, local_uploader):
+                processed += 1
+    finally:
+        if optimizer is None:
+            local_optimizer.cleanup()
+    
     logger.info(f"Daily expand complete. Processed {processed}/{len(selected)} selected posts.")
     return processed

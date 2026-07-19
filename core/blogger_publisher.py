@@ -3,8 +3,45 @@ from googleapiclient.discovery import build
 from config.logger import get_logger
 from config import settings
 from utils.retry import get_retry_decorator
+from bs4 import BeautifulSoup
 
 logger = get_logger(__name__)
+
+
+def validate_content(content: str, min_length: int = 100) -> bool:
+    """Validate that content is suitable for publishing.
+    
+    Args:
+        content: HTML content to validate
+        min_length: Minimum text content length
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not content or not content.strip():
+        logger.error("Content validation failed: empty content")
+        return False
+    
+    # Parse HTML and extract text content
+    soup = BeautifulSoup(content, 'html.parser')
+    text_content = soup.get_text(strip=True)
+    
+    if len(text_content) < min_length:
+        logger.error(f"Content validation failed: text content too short ({len(text_content)} < {min_length} chars)")
+        return False
+    
+    # Check for required structural elements
+    if not soup.find(['h1', 'h2', 'p']):
+        logger.error("Content validation failed: no headings or paragraphs found")
+        return False
+    
+    # Check for product sections if this is a product review post
+    product_sections = soup.find_all('section', class_='product-section')
+    if product_sections and len(product_sections) < 3:
+        logger.warning(f"Content has only {len(product_sections)} product sections (expected at least 3)")
+    
+    return True
+
 
 class BloggerPublisher:
     def __init__(self, blog_id):
@@ -33,6 +70,10 @@ class BloggerPublisher:
         if labels is None:
             labels = []
             
+        # Validate content before publishing
+        if not validate_content(content):
+            raise ValueError("Content validation failed - cannot publish")
+        
         body = {
             "kind": "blogger#post",
             "title": title,
@@ -60,6 +101,10 @@ class BloggerPublisher:
     @get_retry_decorator()
     def update_post(self, post_id, post_body):
         """Update an existing post."""
+        # Validate content if present
+        if 'content' in post_body:
+            if not validate_content(post_body['content']):
+                raise ValueError("Content validation failed - cannot update")
         return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post_body).execute()
 
     @get_retry_decorator()
