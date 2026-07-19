@@ -124,8 +124,8 @@ class SheetsManager:
         logger.info(f"Total pending rows remaining: {count}")
         return count
         
-    def update_row_status(self, row_index, status, url="", error="", post_id=""):
-        """Update the row with Success/Failed status, Date, URL, and Error Log."""
+    def update_row_status(self, row_index, status, url="", error="", post_id="", product_count=None):
+        """Update the row with Success/Failed status, Date, URL, Error Log, and Product Count."""
         try:
             # We need to update columns dynamically
             values = self.get_all_rows()
@@ -170,6 +170,12 @@ class SheetsManager:
                 updates.append({
                     "range": f"{self.sheet_name}!{col_letter(headers.index('Error Log'))}{row_index}",
                     "values": [[error]]
+                })
+
+            if product_count is not None and "Product Count" in headers:
+                updates.append({
+                    "range": f"{self.sheet_name}!{col_letter(headers.index('Product Count'))}{row_index}",
+                    "values": [[product_count]]
                 })
 
             for update in updates:
@@ -505,3 +511,35 @@ class SheetsManager:
             logger.info(f"Historical record added to '{log_sheet}' for: {topic}")
         except Exception as e:
             logger.error(f"Failed to save execution history: {e}")
+
+    def log_review(self, topic, status, drift_summary="", url="", model="deepseek-v4-flash"):
+        """Log the review action into 'Review Logs' tab."""
+        log_sheet = "Review Logs"
+        try:
+            self._ensure_sheet_exists(log_sheet)
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Check for header initialization
+            result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{log_sheet}!A1:F1").execute()
+            if not result.get('values'):
+                headers = [["Timestamp", "Topic", "Status", "Drift Summary", "Model", "URL"]]
+                self.sheet.values().update(
+                    spreadsheetId=self.sheet_id,
+                    range=f"{log_sheet}!A1:F1",
+                    valueInputOption="RAW",
+                    body={"values": headers}
+                ).execute()
+
+            # Append log entry
+            log_entry = [[timestamp, topic, status, drift_summary, model, url]]
+            self.sheet.values().append(
+                spreadsheetId=self.sheet_id,
+                range=log_sheet,
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": log_entry}
+            ).execute()
+            logger.info(f"Review record added to '{log_sheet}' for: {topic}")
+        except Exception as e:
+            logger.error(f"Failed to save review history: {e}")

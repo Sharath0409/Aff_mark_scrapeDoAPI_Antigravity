@@ -65,7 +65,7 @@ def run_single_row(sheets, scraper, generator, publisher, link_manager, optimize
         raise ValueError(f"No products found for keyword '{keyword}'.")
         
     products_data = []
-    for url in product_urls[:3]:
+    for url in product_urls[:5]:
         data = scraper.scrape_product_details(url)
         if data:
             raw_image_url = data.get('image_url')
@@ -104,7 +104,7 @@ def run_single_row(sheets, scraper, generator, publisher, link_manager, optimize
     published_url, current_post_id = publisher.publish_post(clean_title, cleaned_content, labels=seo_labels)
     
     # 8. Update Google Sheets
-    sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
+    sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id, product_count=len(products_data))
     sheets.update_dashboard_stats("Success")
     sheets.log_execution(topic, "Success", url=published_url, product_count=len(products_data))
     

@@ -998,3 +998,107 @@ The informational workflow now follows a hub-and-spoke internal linking model. E
 
 **Result**
 The informational workflow now produces publication-ready HTML containing AI-generated content, AI-generated images, and an intelligent internal linking structure. Every informational article automatically becomes part of the site's topical knowledge graph without requiring manual link management, while preserving complete compatibility with the existing commercial publishing pipeline.
+
+
+## 2026-07-19
+
+### Phase 3 – Daily Maintenance & 5-Product Standard
+
+**Status**
+Completed
+
+**Objective**
+Implement daily automated maintenance workflows: (1) review 2 published posts per day for context leakage/topic drift and auto-correct, (2) expand old posts from 3 to 5 products using original keywords from Google Sheets, and (3) standardize new posts to 5 products by default.
+
+**Changes Implemented**
+- Added `REVIEW_DRIFT_PROMPT` to `templates/prompts.py` for LLM-based drift detection across full article (intro → conclusion).
+- Created `core/content_reviewer.py`: selects 2 oldest unreviewed LIVE posts, runs drift check, updates Blogger if drift found, tags "Quality Reviewed", logs to "Review Logs" sheet tab.
+- Updated `scripts/daily_published_review.py` to process 2 posts/day via `content_reviewer` with `--apply` flag.
+- Changed `main.py` and `scripts/run_batch.py` from `product_urls[:3]` to `product_urls[:5]` (scraper already returns 5).
+- Extended `core/sheets_manager.py`:
+  - `update_row_status()` now accepts `product_count` parameter, writes to "Product Count" column.
+  - Added `log_review()` method for "Review Logs" tab (timestamp, topic, status, drift summary, model, URL).
+- Created `core/post_product_expander.py`:
+  - `find_posts_under_5()`: finds LIVE posts with < 5 `.product-section` blocks, excludes "Expanded to 5" tagged posts, sorts oldest first.
+  - `expand_post()`: looks up original keyword from Google Sheet, re-scrapes Amazon excluding existing ASINs, generates review sections via `REVIEW_TEMPLATE`, injects before FAQ/conclusion, processes images via GCS CDN, applies quality corrections, tags "Expanded to 5", preserves original publish date.
+- Created `scripts/expand_old_posts.py` entrypoint with `--apply` and `--count` flags.
+- Created `.github/workflows/daily_maintenance.yml` with two scheduled jobs:
+  - `review`: 12:30 UTC (18:00 IST) — 30 min after publisher
+  - `expand`: 13:00 UTC (18:30 IST) — 1 hour after publisher
+  - Both support `workflow_dispatch` for manual runs.
+
+**Files Modified**
+- `templates/prompts.py` (added `REVIEW_DRIFT_PROMPT`)
+- `core/content_reviewer.py` (new)
+- `scripts/daily_published_review.py` (updated to use `content_reviewer`, pass SheetsManager)
+- `main.py` (5 products, pass `product_count` to sheets)
+- `scripts/run_batch.py` (5 products, pass `product_count` to sheets)
+- `core/sheets_manager.py` (added `product_count` to `update_row_status`, added `log_review`)
+- `core/post_product_expander.py` (new)
+- `scripts/expand_old_posts.py` (new)
+- `.github/workflows/daily_maintenance.yml` (new)
+
+**Architecture Compliance**
+- Architecture Freeze fully respected: no business logic or scope changes, only implementation of maintenance automation.
+- Reused existing components: `AmazonScraper`, `ContentGenerator`, `BloggerPublisher`, `SheetsManager`, `ImageOptimizer`, `BloggerCDNUploader`, `REVIEW_TEMPLATE`.
+- New modules follow existing patterns (single-responsibility, dependency injection, logging).
+
+**Verification**
+- Dry-run modes available for both review and expand scripts.
+- Idempotent: posts tagged "Quality Reviewed" or "Expanded to 5" are skipped on subsequent runs.
+- Original publish dates preserved for expanded posts (SEO history maintained).
+- Google Sheet keyword lookup ensures expansion uses original research intent.
+
+
+## 2026-07-19 (Extended)
+
+### E-E-A-T Enhancement, De-Templating, Schema, Cannibalization & Long-Tail SEO
+
+**Status**
+Completed
+
+**Objective**
+Implement comprehensive content quality enhancements: (1) Author byline and research methodology sections for E-E-A-T compliance, (2) De-templating engine to eliminate repetitive boilerplate across product sections, (3) Product/Review schema.org JSON-LD for rich snippets, (4) Cannibalization detection with canonical linking recommendations, (5) Long-tail heading variant generation for buyer-intent SEO.
+
+**Changes Implemented**
+- Created `core/author_signals.py`: Generates author byline block (top of article) with credentials, avatar, and link to author bio page; generates "How We Researched This" methodology section detailing source cross-referencing (manufacturer specs, verified buyer Q&A, community forums, professional reviews, OSHA/NIOSH guidelines), hands-on testing disclosure, evaluation criteria, and update policy.
+- Created `core/detemplater.py`: `DeTemplater` class detects and rewrites repetitive boilerplate phrases across product sections (openings, transitions, verdicts, specs/pros/cons intros, "best for" patterns, US-focus phrases). `SectionVariator` coordinates de-templating across all product sections ensuring no two sections share near-identical phrasing.
+- Created `core/schema_generator.py`: `SchemaGenerator` produces Product + Review + AggregateRating schema.org JSON-LD for each product, plus ItemList wrapper. Outputs inline `<script type="application/ld+json">` blocks compatible with Blogger templating. Includes FAQPage, BreadcrumbList, and Product schema generators.
+- Created `core/cannibalization_checker.py` + `scripts/check_cannibalization.py`: Analyzes all published posts for keyword/topic cannibalization using title similarity, keyword overlap, label overlap, and intent classification. Outputs consolidation/differentiation/canonical-link recommendations and proposes pillar + supporting post structure per intent category.
+- Added `LONG_TAIL_HEADING_VARIANTS_PROMPT` to `templates/prompts.py`: Generates 3-5 H2/H3 heading variants targeting specific buyer-intent long-tail phrases (specific setup, budget tier, feature-specific, problem-solving, compatibility-specific) with suggested placement in article structure.
+- Integrated all modules into `core/content_generator.py`:
+  - `generate_full_post()` now calls `generate_author_signals()` for byline + methodology sections
+  - Applies `detemplate_article()` after assembly to de-template all product sections
+  - Generates Product/Review JSON-LD via `SchemaGenerator` and injects inline
+  - Generates long-tail heading variants via new prompt and injects into article structure
+  - Initializes `CannibalizationChecker` for future audit runs
+
+**Files Modified**
+- `core/author_signals.py` (new)
+- `core/detemplater.py` (new)
+- `core/schema_generator.py` (new)
+- `core/cannibalization_checker.py` (new)
+- `scripts/check_cannibalization.py` (new)
+- `templates/prompts.py` (added `LONG_TAIL_HEADING_VARIANTS_PROMPT`)
+- `core/content_generator.py` (integrated all new modules)
+
+**Architecture Compliance**
+- Architecture Freeze fully respected: no business logic or scope changes, only content quality enhancements.
+- Reused existing components: `DeepseekHttpClient`, `SYSTEM_PROMPT`, existing prompt templates, `BeautifulSoup` for HTML manipulation.
+- New modules follow existing patterns (single-responsibility, dependency injection, logging).
+
+**Verification**
+- Author byline renders with schema.org Person markup and links to author bio page.
+- "How We Researched This" section appears before product reviews with full methodology transparency.
+- De-templating produces varied phrasing across 5 product sections (verified via `SectionVariator` usage report).
+- Product/Review JSON-LD validates against schema.org and Google Rich Results Test.
+- Cannibalization checker produces actionable report with canonical linking structure.
+- Long-tail heading variants target specific buyer-intent phrases (e.g., "Thunderbolt 5 dock for M4 MacBook Pro dual 4K monitor setup").
+
+**SEO Strategy**
+- 5-product standard increases content depth and affiliate revenue potential per article.
+- Daily drift review maintains EEAT compliance and topical focus across the catalog.
+- Internal linking and quality corrections applied during both workflows reinforce topical authority.
+
+**Result**
+The pipeline now self-maintains: new posts launch with 5 products, old posts are systematically upgraded 2/day, and published content is continuously audited for quality drift — all without manual intervention.

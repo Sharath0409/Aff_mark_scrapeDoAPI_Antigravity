@@ -130,6 +130,7 @@ Instructions:
 8. Validation: Before returning the introduction verify: 1) No fake personal experience is claimed, 2) No hallucinated claims exist, 3) No unrelated products are mentioned, 4) The content is US-focused, 5) Topic consistency is 100%, 6) The text is Helpful Content compliant. If validation fails, regenerate until it passes.
 """
 
+
 REVIEWS_HEADER_TEMPLATE = """
 Generate a conversational heading for the reviews section. 
 Example: 'My Top Picks: What Actually Works (and What Doesn't).'
@@ -271,7 +272,7 @@ Do NOT write any article content.
 Do NOT write any paragraphs.
 Do NOT write any HTML.
 Do NOT write any Markdown.
-Do NOT write FAQs.
+Do NOT write any FAQs.
 Do NOT write a conclusion.
 
 Produce ONLY the following blueprint fields in plain text.
@@ -393,3 +394,73 @@ Caption: [Write a clear, editorial caption explaining what is depicted]
 """
 
 
+REVIEW_DRIFT_PROMPT = """
+You are the senior editorial quality reviewer for RemoteProStor.com, an affiliate blog focused on remote work, home office setup, productivity, ergonomics, and workspace improvement for US readers.
+
+Your task is to review an ALREADY PUBLISHED article from its introduction all the way through to its final thoughts / conclusion, and detect any CONTEXT LEAKAGE or TOPIC DEVIATION.
+
+Article Topic (the single subject that must be maintained throughout): {topic}
+Primary Keyword: {keyword}
+
+Full Article HTML:
+{html_content}
+
+What to check (read every section: intro, quick summary, product reviews, comparison, FAQ, conclusion, final thoughts):
+1. Context Leakage: Does any section mention products, categories, or advice that do NOT belong to the article topic? (Example: a "Bluetooth Mouse" article that starts discussing office chairs, standing desks, keyboards, webcams, or UPS units.)
+2. Topic Deviation: Does the conclusion or final thoughts drift away from the stated topic, introduce a different niche, or make claims outside the remote-work / home-office scope?
+3. Hallucinated or off-topic products: Any product mentioned that was not part of the intended review set.
+4. Cross-category language: Generic affiliate-blog phrasing that pulls the reader toward unrelated buying guides.
+
+Return ONLY a valid JSON object (no markdown, no code fences) with this exact structure:
+{
+  "drift_detected": true or false,
+  "drift_sections": ["intro", "conclusion"],
+  "drift_summary": "Short plain-English explanation of what leaked or deviated, or empty string if none.",
+  "corrected_html": "The COMPLETE corrected article HTML if drift_detected is true. Keep all on-topic sections identical. Only rewrite or remove the off-topic parts so the entire article stays 100% focused on the topic. If drift_detected is false, return an empty string."
+}
+
+Rules:
+- Preserve the original HTML structure, CSS classes, affiliate links, and image tags that are on-topic.
+- Do NOT invent new products. Only remove or rewrite off-topic content.
+- Keep the article US-focused, EEAT-compliant, and OSHA-aware where ergonomics apply.
+- If no drift is found, set drift_detected to false and return an empty corrected_html.
+"""
+
+
+LONG_TAIL_HEADING_VARIANTS_PROMPT = """
+Generate 3-5 H2/H3 heading variants targeting specific buyer-intent long-tail phrases
+for the article topic: '{topic}' (primary keyword: '{keyword}').
+
+The article covers these products: {products_summary}
+
+Requirements:
+1. Each variant must target a specific, searchable long-tail phrase that real buyers
+   would type into Google (e.g., "Thunderbolt 5 dock for M4 MacBook Pro dual monitor setup"
+   rather than just "best docking stations").
+2. Variants should cover different buyer intents:
+   - Specific use case / setup (e.g., "dual 4K monitor setup for MacBook Pro")
+   - Budget tier (e.g., "budget USB-C hub under $50 for travel")
+   - Feature-specific (e.g., "Thunderbolt 4 dock with 100W power delivery")
+   - Problem-solving (e.g., "docking station that doesn't overheat MacBook Pro")
+   - Compatibility-specific (e.g., "docking station compatible with Dell XPS 15 2024")
+3. Each variant must be a valid H2 or H3 heading that could naturally fit into
+   the article structure without disrupting flow.
+4. Return as JSON array of objects with: "heading", "target_phrase", "intent", "suggested_placement"
+5. Do NOT include generic "best X" or "top X" headings - those are already covered.
+
+Example output format:
+[
+  {
+    "heading": "Thunderbolt 5 Dock for M4 MacBook Pro Dual 4K Monitor Setup",
+    "target_phrase": "thunderbolt 5 dock m4 macbook pro dual monitor",
+    "intent": "specific_setup",
+    "suggested_placement": "after 'How We Evaluated' section, before product reviews"
+  },
+  {
+    "heading": "Best Budget USB-C Hub Under $50 for Travel",
+    "target_phrase": "budget usb-c hub under 50 travel",
+    "intent": "budget_tier",
+    "suggested_placement": "in 'Best Value Pick' section of Quick Summary"
+  }
+]
+"""

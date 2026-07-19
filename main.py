@@ -91,7 +91,7 @@ def main():
             raise ValueError(f"No products found for keyword '{keyword}'.")
             
         products_data = []
-        for url in product_urls[:3]:
+        for url in product_urls[:5]:
             data = scraper.scrape_product_details(url)
             if data:
                 # --- BLOGGER-NATIVE IMAGE OPTIMIZATION ---
@@ -130,7 +130,7 @@ def main():
         published_url, current_post_id = publisher.publish_post(clean_title, cleaned_content, labels=seo_labels)
         
         # 7. Update Google Sheets
-        sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id)
+        sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id, product_count=len(products_data))
         sheets.update_dashboard_stats("Success")
         sheets.log_execution(topic, "Success", url=published_url, product_count=len(products_data))
             
@@ -144,9 +144,9 @@ def main():
         logger.error(f"Pipeline failed: {e}", exc_info=True)
         if 'row_index' in locals():
             try:
-                sheets.update_row_status(row_index, "Failed", error=str(e))
+                sheets.update_row_status(row_index, "Failed", error=str(e), product_count=0)
                 sheets.update_dashboard_stats("Failed")
-                sheets.log_execution(topic, "Failed", error=str(e))
+                sheets.log_execution(topic, "Failed", error=str(e), product_count=0)
             except Exception as sheet_err:
                 logger.error(f"Failed to update sheet on pipeline failure: {sheet_err}")
         try:
