@@ -8,6 +8,7 @@ import time
 from typing import Dict, Any
 
 from config.logger import get_logger
+from config import settings
 from core.sheets_manager import SheetsManager
 from core.scraper import AmazonScraper
 from core.content_generator import ContentGenerator
