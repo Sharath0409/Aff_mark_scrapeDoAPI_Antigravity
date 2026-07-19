@@ -450,17 +450,17 @@ Requirements:
 
 Example output format:
 [
-  {
+  {{
     "heading": "Thunderbolt 5 Dock for M4 MacBook Pro Dual 4K Monitor Setup",
     "target_phrase": "thunderbolt 5 dock m4 macbook pro dual monitor",
     "intent": "specific_setup",
     "suggested_placement": "after 'How We Evaluated' section, before product reviews"
-  },
-  {
+  }},
+  {{
     "heading": "Best Budget USB-C Hub Under $50 for Travel",
     "target_phrase": "budget usb-c hub under 50 travel",
     "intent": "budget_tier",
     "suggested_placement": "in 'Best Value Pick' section of Quick Summary"
-  }
+  }}
 ]
 """
