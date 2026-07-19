@@ -1,4 +1,4 @@
-from openai import OpenAI
+from core.deepseek_client import DeepseekHttpClient
 from config.logger import get_logger
 from config import settings
 from utils.retry import get_retry_decorator
@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 class ContentGenerator:
     def __init__(self):
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+        self.client = DeepseekHttpClient(api_key=settings.DEEPSEEK_API_KEY) if settings.DEEPSEEK_API_KEY else None
 
     def _apply_quality_corrections(self, html, topic, keyword):
         """Clean generated HTML so it stays topic-focused, US-focused, and EEAT-safe."""
@@ -141,11 +141,13 @@ class ContentGenerator:
         return str(soup).strip()
         
     @get_retry_decorator()
-    def generate_section(self, prompt, model="gpt-4o"):
-        """Call OpenAI API to generate content."""
+    def generate_section(self, prompt, model="deepseek-v4-flash"):
+        """Call Deepseek API to generate content."""
         logger.info(f"Generating content with model {model}")
         if not self.client:
-            return "<p>Content generation skipped because no OpenAI API key is configured.</p>"
+            return "<p>Content generation skipped because no Deepseek API key is configured.</p>"
+        if model in {"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4o-mini"}:
+            model = "deepseek-v4-flash"
         try:
             response = self.client.chat.completions.create(
                 model=model,
@@ -157,20 +159,20 @@ class ContentGenerator:
             )
             content = response.choices[0].message.content
             
-            # OpenAI sometimes wraps HTML in markdown blocks, let's clean it
+            # Deepseek sometimes wraps HTML in markdown blocks, let's clean it
             if content.startswith("```html"):
                 content = content.replace("```html", "").replace("```", "")
             
             return sanitize_html(content)
         except Exception as e:
-            logger.error(f"Error calling OpenAI API: {e}")
+            logger.error(f"Error calling Deepseek API: {e}")
             raise
             
     def generate_seo_tags(self, topic, keyword):
         """Generate SEO labels for Blogger."""
         logger.info("Generating SEO optimized labels...")
         prompt = SEO_TAGS_TEMPLATE.format(topic=topic, keyword=keyword)
-        result = self.generate_section(prompt, model="gpt-4o-mini")
+        result = self.generate_section(prompt, model="deepseek-v4-flash")
         # Strip HTML tags just in case
         result = result.replace('<p>', '').replace('</p>', '').replace('\n', '').strip()
         tags = [tag.strip() for tag in result.replace('"', '').split(',') if tag.strip()]
@@ -262,7 +264,7 @@ class ContentGenerator:
                 features=p['features']
             )
             
-            review_content = self.generate_section(r_prompt, model="gpt-4o")
+            review_content = self.generate_section(r_prompt, model="deepseek-v4-flash")
             
             # Build optimized image tag with explicit dimensions
             image_html = ""
@@ -316,7 +318,7 @@ class ContentGenerator:
     def generate_informational_blueprint(self, topic, keyword, category):
         """Generate a content planning blueprint for an informational article.
 
-        Reuses: self.client (OpenAI), generate_section() (with retry + logging),
+        Reuses: self.client (Deepseek), generate_section() (with retry + logging),
         SYSTEM_PROMPT, and the shared INFORMATIONAL_BLUEPRINT_TEMPLATE.
         Returns a plain-text blueprint string. Does NOT generate article content.
         """
@@ -328,14 +330,14 @@ class ContentGenerator:
         )
         # generate_section() applies SYSTEM_PROMPT, the retry decorator, and logging.
         # temperature=0.4 chosen for structured, consistent blueprint output.
-        blueprint = self.generate_section(prompt, model="gpt-4o")
+        blueprint = self.generate_section(prompt, model="deepseek-v4-flash")
         logger.info("Informational blueprint generation complete.")
         return blueprint
 
     def generate_informational_article(self, blueprint, topic, keyword, category):
         """Generate a complete informational article using the blueprint as source of truth.
 
-        Reuses: self.client (OpenAI), generate_section() (with retry + logging),
+        Reuses: self.client (Deepseek), generate_section() (with retry + logging),
         SYSTEM_PROMPT, and the shared INFORMATIONAL_ARTICLE_TEMPLATE.
         Returns clean, semantic HTML article. Does NOT generate conclusion, FAQs, or image placeholders.
         """
@@ -346,14 +348,14 @@ class ContentGenerator:
             keyword=keyword,
             category=category
         )
-        article = self.generate_section(prompt, model="gpt-4o")
+        article = self.generate_section(prompt, model="deepseek-v4-flash")
         logger.info("Informational article generation complete.")
         return article
 
     def generate_image_plan(self, blueprint, article, topic, keyword, category):
         """Generate a structured image plan for the informational article.
 
-        Reuses: self.client (OpenAI), generate_section() (with retry + logging),
+        Reuses: self.client (Deepseek), generate_section() (with retry + logging),
         SYSTEM_PROMPT, and the shared INFORMATIONAL_IMAGE_PLAN_TEMPLATE.
         Returns a plain-text image plan.
         """
@@ -365,16 +367,16 @@ class ContentGenerator:
             keyword=keyword,
             category=category
         )
-        image_plan = self.generate_section(prompt, model="gpt-4o")
+        image_plan = self.generate_section(prompt, model="deepseek-v4-flash")
         logger.info("Image plan generation complete.")
         return image_plan
 
     @get_retry_decorator()
     def generate_ai_image(self, prompt, size="1024x1024"):
-        """Call OpenAI DALL-E 3 API to generate an image."""
-        logger.info(f"Generating AI image via DALL-E 3 (size: {size})")
+        """Call Deepseek image generation API to generate an image."""
+        logger.info(f"Generating AI image via Deepseek (size: {size})")
         response = self.client.images.generate(
-            model="dall-e-3",
+            model="deepseek-v4-flash",
             prompt=prompt,
             size=size,
             quality="standard",

@@ -330,7 +330,7 @@ class SheetsManager:
         except Exception as e:
             logger.error(f"Failed to update dashboard stats: {e}")
 
-    def log_execution(self, topic, status, url="", error="", model="gpt-4o", product_count=0):
+    def log_execution(self, topic, status, url="", error="", model="deepseek-v4-flash", product_count=0):
         """Log the detailed execution history of a single row into 'Execution Logs' tab."""
         log_sheet = "Execution Logs"
         try:

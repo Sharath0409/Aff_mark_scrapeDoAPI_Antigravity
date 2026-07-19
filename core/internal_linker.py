@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from typing import List, Dict
-from openai import OpenAI
+from core.deepseek_client import DeepseekHttpClient
 from config import settings
 from templates.prompts import INTERNAL_LINK_RELEVANCE_PROMPT, CONTEXTUAL_LINK_INJECTION_PROMPT
 
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class InternalLinkManager:
     def __init__(self, publisher):
         self.publisher = publisher
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.client = DeepseekHttpClient(api_key=settings.DEEPSEEK_API_KEY)
         self.corpus = [] # Cache of existing posts
 
     def refresh_corpus(self):
@@ -51,7 +51,7 @@ class InternalLinkManager:
         try:
             logger.info("Asking AI to select most relevant internal links...")
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="deepseek-v4-flash",
                 messages=[{"role": "user", "content": prompt}]
             )
             
@@ -90,7 +90,7 @@ class InternalLinkManager:
         try:
             logger.info(f"Injecting {len(related_articles)} internal links into HTML content...")
             response = self.client.chat.completions.create(
-                model="gpt-4o", # Use full gpt-4o for complex HTML editing
+                model="deepseek-v4-flash",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3 # Keep it precise
             )

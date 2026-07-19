@@ -382,7 +382,7 @@ Changes:
 Verification:
 - Verified compatibility with existing SheetsManager constructor.
 - No Blogger integration added.
-- No OpenAI calls added.
+- No Deepseek calls added.
 - No scheduler modifications.
 - No architecture changes.
 
@@ -431,7 +431,7 @@ Exit
 - Confirmed only one file was modified.
 - Confirmed status is updated using the existing reusable method.
 - Confirmed no changes to the commercial workflow.
-- Confirmed no OpenAI API calls.
+- Confirmed no Deepseek API calls.
 - Confirmed no Blogger publishing.
 - Confirmed no image generation.
 - Confirmed no execution logging.
@@ -454,7 +454,7 @@ Implement AI-powered blueprint generation for informational articles while fully
 **Changes Implemented**
 - Added `INFORMATIONAL_BLUEPRINT_TEMPLATE` to the shared prompt library.
 - Extended `ContentGenerator` with a reusable `generate_informational_blueprint()` method.
-- Reused the existing OpenAI client, retry mechanism, SYSTEM_PROMPT, logging, and `generate_section()` infrastructure.
+- Reused the existing Deepseek client, retry mechanism, SYSTEM_PROMPT, logging, and `generate_section()` infrastructure.
 - Updated `main_informational.py` to generate and print an informational article blueprint after selecting a topic and marking it as `Processing`.
 
 **Workflow**
@@ -488,7 +488,7 @@ Exit
 
 **Architecture Compliance**
 - Architecture Freeze fully respected.
-- No duplicate OpenAI implementation created.
+- No duplicate Deepseek implementation created.
 - Shared prompt library reused.
 - Shared ContentGenerator reused.
 - Shared retry mechanism reused.
@@ -522,7 +522,7 @@ Implement AI-powered generation of a complete informational article using the pr
 **Changes Implemented**
 - Added `INFORMATIONAL_ARTICLE_TEMPLATE` to the shared prompt library.
 - Extended `ContentGenerator` with a reusable `generate_informational_article()` method.
-- Configured the article generation method to reuse the existing OpenAI client, retry mechanism, shared `SYSTEM_PROMPT`, logging framework, and `generate_section()` infrastructure.
+- Configured the article generation method to reuse the existing Deepseek client, retry mechanism, shared `SYSTEM_PROMPT`, logging framework, and `generate_section()` infrastructure.
 - Updated `main_informational.py` to execute the following sequence:
   - Generate article blueprint
   - Generate complete informational article from the blueprint
@@ -567,7 +567,7 @@ Exit
 - Existing AI architecture reused without duplication.
 - Shared prompt library extended instead of creating new prompt locations.
 - Existing `ContentGenerator` reused.
-- Existing OpenAI client reused.
+- Existing Deepseek client reused.
 - Existing retry mechanism reused.
 - Existing logging reused.
 - Commercial workflow remains completely isolated.
@@ -602,7 +602,7 @@ Introduce an AI-powered Image Planning stage that determines the optimal image s
 **Changes Implemented**
 - Added `INFORMATIONAL_IMAGE_PLAN_TEMPLATE` to the shared prompt library.
 - Extended `ContentGenerator` with a reusable `generate_image_plan()` method.
-- Configured the image planner to reuse the existing OpenAI client, shared `SYSTEM_PROMPT`, retry mechanism, logging framework, and `generate_section()` infrastructure.
+- Configured the image planner to reuse the existing Deepseek client, shared `SYSTEM_PROMPT`, retry mechanism, logging framework, and `generate_section()` infrastructure.
 - Updated `main_informational.py` to execute the following sequence:
   - Generate article blueprint
   - Generate complete informational article
@@ -651,7 +651,7 @@ Exit
 - Architecture Freeze fully respected.
 - Shared prompt library extended without introducing duplicate prompt locations.
 - Existing `ContentGenerator` reused.
-- Existing OpenAI client reused.
+- Existing Deepseek client reused.
 - Existing retry mechanism reused.
 - Existing logging reused.
 - Commercial workflow remains completely isolated.
@@ -684,7 +684,7 @@ Implement AI-powered image generation for informational articles by converting t
 
 **Changes Implemented**
 - Extended the shared AI layer to generate images from the approved image plan.
-- Reused the existing OpenAI image generation workflow instead of creating a separate implementation.
+- Reused the existing Deepseek image generation workflow instead of creating a separate implementation.
 - Reused the existing `ImageOptimizer` to optimize all generated images before upload.
 - Reused the existing `BloggerCDNUploader` to upload optimized images to Google Cloud Storage.
 - Implemented a reusable orchestration flow that processes each planned image sequentially:
@@ -750,7 +750,7 @@ Exit
 
 **Architecture Compliance**
 - Architecture Freeze fully respected.
-- Existing OpenAI AI layer reused.
+- Existing Deepseek AI layer reused.
 - Existing image optimization pipeline reused.
 - Existing Google Cloud upload pipeline reused.
 - Existing cleanup mechanism reused.

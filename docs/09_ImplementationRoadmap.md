@@ -31,7 +31,7 @@ The project currently includes:
 - Amazon product retrieval
 - Product image optimization
 - Google Cloud image hosting
-- OpenAI content generation
+- Deepseek content generation
 - Internal linking
 - Execution logging
 - Email notifications
@@ -56,7 +56,7 @@ Establish the core infrastructure required for autonomous publishing.
 - Google Sheets integration
 - Blogger integration
 - Google Cloud integration
-- OpenAI integration
+- Deepseek integration
 - Email notification system
 
 ### Completion Criteria
@@ -220,7 +220,7 @@ Successful implementation depends upon:
 - Google Sheets
 - Blogger
 - Google Cloud Storage
-- OpenAI API
+- Deepseek API
 - Amazon product retrieval
 - Email notification service
 

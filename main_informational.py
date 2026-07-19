@@ -45,7 +45,7 @@ def main():
     print(f"Category:\n{category}\n")
 
     # Generate the content blueprint using the shared ContentGenerator.
-    # Reuses: existing OpenAI client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
+    # Reuses: existing Deepseek client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
     generator = ContentGenerator()
     blueprint = generator.generate_informational_blueprint(topic, keyword, category)
 
@@ -54,7 +54,7 @@ def main():
     print("\n-------------------------")
 
     # Generate the complete informational article based on the blueprint.
-    # Reuses: existing OpenAI client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
+    # Reuses: existing Deepseek client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
     article = generator.generate_informational_article(blueprint, topic, keyword, category)
 
     print("\n--- Generated Informational Article ---\n")
@@ -62,7 +62,7 @@ def main():
     print("\n---------------------------------------")
 
     # Generate the structured image plan based on the blueprint and article.
-    # Reuses: existing OpenAI client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
+    # Reuses: existing Deepseek client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
     image_plan = generator.generate_image_plan(blueprint, article, topic, keyword, category)
 
     print("\n--- Generated Image Plan ---\n")

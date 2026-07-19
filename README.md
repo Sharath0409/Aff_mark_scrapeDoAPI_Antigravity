@@ -6,7 +6,7 @@ This system is designed as a fully autonomous, highly fault-tolerant ETL (Extrac
 
 **Data Flow:**
 1. **Extraction**: The system reads pending blog topics and keywords from a Google Sheet. It then queries Amazon via the **Scrape.do API** (utilizing proxy rotation and anti-bot bypassing) to extract top-ranking products, prices, ratings, and features.
-2. **Transformation**: The scraped raw data is injected into optimized Prompt Templates. The **OpenAI API** synthesizes this into a cohesive, SEO-optimized, human-sounding blog post complete with HTML formatting, comparison tables, pros/cons, and Amazon Associate links.
+2. **Transformation**: The scraped raw data is injected into optimized Prompt Templates. The **Deepseek API** synthesizes this into a cohesive, SEO-optimized, human-sounding blog post complete with HTML formatting, comparison tables, pros/cons, and Amazon Associate links.
 3. **Loading**: The finished HTML payload is pushed to **Blogger.com** via its REST API. The Google Sheet is then updated with the live URL or an error stack trace.
 4. **Orchestration**: The entire pipeline is orchestrated via a **GitHub Actions** cron job, operating entirely serverless. An SMTP notifier acts as a watchdog, alerting the user when the topic queue is running low.
 
@@ -25,11 +25,11 @@ autoblogger/
 ├── core/
 │   ├── sheets_manager.py             # Google Sheets API interactions (read/write)
 │   ├── scraper.py                    # Amazon scraping logic using Scrape.do
-│   ├── content_generator.py          # OpenAI API integration & prompt engineering
+│   ├── content_generator.py          # Deepseek API integration & prompt engineering
 │   ├── blogger_publisher.py          # Blogger API v3 integration (publish/draft)
 │   └── notifier.py                   # Email warning system (SMTP)
 ├── templates/
-│   └── prompts.py                    # Jinja2 / string templates for OpenAI
+│   └── prompts.py                    # Jinja2 / string templates for Deepseek
 ├── utils/
 │   ├── retry.py                      # Exponential backoff decorators (@retry)
 │   ├── text_cleaner.py               # HTML sanitization, JSON extraction
@@ -44,7 +44,7 @@ autoblogger/
 - `settings.py`: Validates that all required environment variables are present before execution starts.
 - `sheets_manager.py`: Connects via Google Service Account to fetch `Pending` rows and write back `Success`/`Failed`.
 - `scraper.py`: Handles HTTP requests to Scrape.do, parses BeautifulSoup elements, handles pagination and empty results.
-- `content_generator.py`: Manages the token limits, system messages, and JSON-structured outputs from OpenAI.
+- `content_generator.py`: Manages the token limits, system messages, and JSON-structured outputs from Deepseek.
 - `blogger_publisher.py`: Handles Google OAuth2 refresh tokens and pushes the final HTML payload to Blogger.
 - `prompts.py`: Stores the system prompts to ensure consistent tone, SEO structure, and formatting.
 
@@ -56,7 +56,7 @@ To deploy this system, the user must provide the following credentials and confi
 
 | Secret Name | Description / Source | Example Format |
 | :--- | :--- | :--- |
-| `OPENAI_API_KEY` | OpenAI dashboard -> API Keys. | `sk-proj-...` |
+| `DEEPSEEK_API_KEY` | Deepseek dashboard -> API Keys. | `sk-...` |
 | `SCRAPE_DO_TOKEN` | Scrape.do dashboard API token. | `9a8b7c6d5e4f...` |
 | `AMAZON_AFFILIATE_TAG` | Your Amazon Associates Store ID. | `myblog-20` |
 | `GOOGLE_SHEET_ID` | The alphanumeric ID in your Google Sheet URL. | `1BxiMVs0XRY...` |
@@ -108,7 +108,7 @@ Create a Google Sheet and share it with your Service Account email (Editor permi
 ## 6. AI Content Generation Requirements
 
 **Workflow:**
-We utilize OpenAI's `gpt-4o` (or `gpt-4-turbo`) for high-quality reasoning and HTML generation.
+111:We utilize Deepseek's `deepseek-v4-flash` for high-quality reasoning and HTML generation.
 
 **Chunking Strategy (To prevent Hallucinations & Timeouts):**
 Instead of generating the whole blog in one API call, chunk it:
@@ -177,7 +177,7 @@ jobs:
 
       - name: Run Publisher Pipeline
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
           AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -208,7 +208,7 @@ def fetch_amazon_page(url):
 
 **Failure Scenarios:**
 - **Empty Product Results**: If scraper finds 0 products, abort run, mark sheet as `Failed: No products found`.
-- **OpenAI Timeout**: Retries up to 3 times. If fails, marks sheet `Failed: OpenAI Error`.
+- **Deepseek Timeout**: Retries up to 3 times. If fails, marks sheet `Failed: Deepseek Error`.
 - **API Limits**: Rate limits return HTTP 429. Tenacity catches this, waits (4s, 8s, 10s), and retries.
 - **Malformed HTML**: BeautifulSoup `find()` fails. Handled via `try-except` blocks logging errors.
 
@@ -228,20 +228,20 @@ In `main.py`, after fetching the sheet:
 
 **Estimates per Post:**
 - **Scrape.do**: ~5 API calls per post. Cost is negligible (starts at $30/mo for 250k credits).
-- **OpenAI API**: ~3000 input tokens, ~2000 output tokens via `gpt-4o`. Approx $0.04 - $0.08 per blog post.
+- **Deepseek API**: ~3000 input tokens, ~2000 output tokens via `deepseek-v4-flash`. Approx cost will depend on Deepseek pricing.
 - **Hosting**: $0 (GitHub Actions free tier covers this entirely).
-- **Total Cost per month** (30 posts): ~$2.50 (OpenAI) + $30 (Scraper) = **$32.50/month**.
+- **Total Cost per month** (30 posts): estimate based on Deepseek pricing plus Scrape.do costs.
 
 **Optimization:**
-- Use `gpt-4o-mini` for the Intro/Conclusion and only use `gpt-4o` for the complex product comparison matrix.
+- Use `deepseek-v4-flash` for the Intro/Conclusion and the comparison matrix.
 - Cache scraped products locally in a small SQLite DB if you plan to reuse the same ASINs across different articles.
-- Token reduction: truncate massive product descriptions and reviews before feeding them to OpenAI.
+- Token reduction: truncate massive product descriptions and reviews before feeding them to Deepseek.
 
 ---
 
 ## 12. SEO & Schema Strategy
 - **NLP Headings**: H1 contains main keyword. H2s contain LSI (Latent Semantic Indexing) keywords (e.g., "Is [Product] worth it?").
-- **Comparison Tables**: Google’s Helpful Content Update loves tables. OpenAI is prompted to output `<table class="comparison">` summarizing features.
+- **Comparison Tables**: Google’s Helpful Content Update loves tables. Deepseek is prompted to output `<table class="comparison">` summarizing features.
 - **Pros & Cons**: Explicit `<ul>` lists for Pros and Cons (crucial for affiliate SEO).
 - **Schema**: Embed this JSON-LD at the bottom of the HTML:
   ```html
@@ -260,7 +260,7 @@ In `main.py`, after fetching the sheet:
 ## 13. Scaling Recommendations & Future Improvements
 - **Scale**: Once generating revenue, duplicate the repository for different niches, changing only the Sheet ID and prompts.
 - **Future Additions**: 
-  - Add an image generator (DALL-E 3) to create a custom featured image.
+  - Add an image generator using Deepseek image generation to create a custom featured image.
   - Implement a programmatic YouTube search to embed a relevant video, increasing page dwell time.
   - Track clicks by appending UTM parameters to the Amazon Affiliate links and using an analytics API.
 
@@ -270,7 +270,7 @@ In `main.py`, after fetching the sheet:
 3. Service Account added as Editor to Google Sheet.
 4. Blogger OAuth Refresh Token generated and tested locally.
 5. GitHub Repository created.
-6. GitHub Secrets populated (`OPENAI_API_KEY`, `SCRAPE_DO_TOKEN`, `GCP_SERVICE_ACCOUNT`, `BLOGGER_REFRESH_TOKEN`, `SMTP_APP_PASSWORD`, etc.).
+6. GitHub Secrets populated (`DEEPSEEK_API_KEY`, `SCRAPE_DO_TOKEN`, `GCP_SERVICE_ACCOUNT`, `BLOGGER_REFRESH_TOKEN`, `SMTP_APP_PASSWORD`, etc.).
 7. `.github/workflows/daily_publisher.yml` committed.
 8. Dry-run executed successfully from the Actions tab.
 

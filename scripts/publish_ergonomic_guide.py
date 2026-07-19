@@ -9,7 +9,7 @@ from config import settings
 from core.blogger_publisher import BloggerPublisher
 from core.internal_linker import InternalLinkManager
 from scripts.remove_h1_tags import BloggerH1Remover
-from openai import OpenAI
+from core.deepseek_client import DeepseekHttpClient
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -19,7 +19,7 @@ def main():
     logger.info("Initializing article generation and publishing workflow...")
     
     # 1. Initialize Clients and Managers
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = DeepseekHttpClient(api_key=settings.DEEPSEEK_API_KEY)
     publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
     link_manager = InternalLinkManager(publisher)
     h1_remover = BloggerH1Remover(dry_run=False)
@@ -73,7 +73,7 @@ This part must include:
 Target Length: 400-500 words. Make the explanations detailed and practical.
 """
     r1 = client.chat.completions.create(
-        model="gpt-4o",
+        model="deepseek-v4-flash",
         messages=[{"role": "user", "content": prompt_1}],
         temperature=0.7
     )
@@ -90,7 +90,7 @@ This part must include:
 Target Length: 550-650 words. Do not summarize; write comprehensive paragraphs detailing physical benefits and options.
 """
     r2 = client.chat.completions.create(
-        model="gpt-4o",
+        model="deepseek-v4-flash",
         messages=[
             {"role": "assistant", "content": section_1},
             {"role": "user", "content": prompt_2}
@@ -110,7 +110,7 @@ This part must include:
 Target Length: 500-600 words. Provide specific anatomical context, e.g. reducing pronation of the forearm and strain on the carpal tunnel.
 """
     r3 = client.chat.completions.create(
-        model="gpt-4o",
+        model="deepseek-v4-flash",
         messages=[
             {"role": "assistant", "content": section_1 + "\n" + section_2},
             {"role": "user", "content": prompt_3}
@@ -130,7 +130,7 @@ This part must include:
 Target Length: 500-600 words.
 """
     r4 = client.chat.completions.create(
-        model="gpt-4o",
+        model="deepseek-v4-flash",
         messages=[
             {"role": "assistant", "content": section_1 + "\n" + section_2 + "\n" + section_3},
             {"role": "user", "content": prompt_4}
@@ -150,7 +150,7 @@ This part must include:
 Target Length: 500-600 words.
 """
     r5 = client.chat.completions.create(
-        model="gpt-4o",
+        model="deepseek-v4-flash",
         messages=[
             {"role": "assistant", "content": section_1 + "\n" + section_2 + "\n" + section_3 + "\n" + section_4},
             {"role": "user", "content": prompt_5}

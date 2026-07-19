@@ -34,7 +34,7 @@ Before deploying any workflow changes, verify that:
 - Required API credentials are configured.
 - Google services are accessible.
 - Blogger authentication succeeds.
-- OpenAI authentication succeeds.
+- Deepseek authentication succeeds.
 - Google Cloud authentication succeeds.
 
 Deployment should not proceed if any required dependency is unavailable.
@@ -224,7 +224,7 @@ Examples include:
 - Google Sheets unavailable.
 - Blogger unavailable.
 - Amazon unavailable.
-- OpenAI unavailable.
+- Deepseek unavailable.
 - Google Cloud unavailable.
 - Invalid credentials.
 - Missing configuration.
