@@ -296,6 +296,9 @@ class SheetsManager:
                     body={"values": init_values}
                 ).execute()
                 values = init_values
+                
+                # Initialize the filter section for status-based row display
+                self._initialize_dashboard_filter()
 
             metric_col = [row[0] for row in values]
             updates = []
@@ -329,6 +332,147 @@ class SheetsManager:
             logger.info(f"Dashboard updated with status: {status}")
         except Exception as e:
             logger.error(f"Failed to update dashboard stats: {e}")
+
+    def _initialize_dashboard_filter(self):
+        """Initialize the filter section on the Dashboard sheet for status-based row display."""
+        dashboard_sheet = "Dashboard"
+        try:
+            # Add filter helper section starting at column D
+            filter_section = [
+                ["", ""],  # Empty row for spacing
+                ["Select Status to View Rows:", ""],
+                ["Status Filter:", "Success"],  # D3: User selects status here
+                ["", ""],
+                ["Filtered Results for Status:"],
+                ["Topic", "Keyword", "Category", "Status", "Blog URL", "Post ID", "Error Log"]
+            ]
+            
+            self.sheet.values().update(
+                spreadsheetId=self.sheet_id,
+                range=f"{dashboard_sheet}!D1:E10",
+                valueInputOption="RAW",
+                body={"values": filter_section}
+            ).execute()
+            logger.info("Dashboard filter section initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize dashboard filter: {e}")
+
+    def get_rows_by_status(self, target_status):
+        """Fetch all rows from the main sheet that match a specific status."""
+        try:
+            values = self.get_all_rows()
+            if not values or len(values) < 2:
+                return []
+            
+            headers = values[0]
+            if "Status" not in headers:
+                return []
+            
+            status_idx = headers.index("Status")
+            
+            # Get indices for all relevant columns
+            column_indices = {}
+            for col_name in ["Topic", "Keyword", "Category", "Blog URL", "Post ID", "Error Log"]:
+                if col_name in headers:
+                    column_indices[col_name] = headers.index(col_name)
+            
+            matching_rows = [headers]  # Start with headers
+            for row in values[1:]:
+                row_status = row[status_idx].strip() if len(row) > status_idx else ""
+                if row_status.lower() == target_status.lower():
+                    # Build a row with only relevant columns
+                    filtered_row = []
+                    for col_name in ["Topic", "Keyword", "Category", "Status", "Blog URL", "Post ID", "Error Log"]:
+                        if col_name in column_indices:
+                            col_idx = column_indices[col_name]
+                            filtered_row.append(row[col_idx] if len(row) > col_idx else "")
+                        elif col_name == "Status":
+                            filtered_row.append(row_status)
+                    matching_rows.append(filtered_row)
+            
+            logger.info(f"Found {len(matching_rows) - 1} rows with status: {target_status}")
+            return matching_rows
+        except Exception as e:
+            logger.error(f"Error fetching rows by status '{target_status}': {e}")
+            return []
+
+    def update_dashboard_filtered_results(self, status):
+        """Update the Dashboard sheet with filtered rows for the selected status."""
+        dashboard_sheet = "Dashboard"
+        try:
+            # Get rows matching the selected status
+            matching_rows = self.get_rows_by_status(status)
+            
+            if not matching_rows:
+                logger.warning(f"No rows found for status: {status}")
+                return
+            
+            # Update the filter value indicator
+            self.sheet.values().update(
+                spreadsheetId=self.sheet_id,
+                range=f"{dashboard_sheet}!E3",
+                valueInputOption="RAW",
+                body={"values": [[status]]}
+            ).execute()
+            
+            # Clear previous results (up to 100 rows)
+            clear_range = f"{dashboard_sheet}!D6:J105"
+            self.sheet.values().clear(
+                spreadsheetId=self.sheet_id,
+                range=clear_range
+            ).execute()
+            
+            # Write new filtered results starting at D6
+            if len(matching_rows) > 1:  # More than just headers
+                self.sheet.values().update(
+                    spreadsheetId=self.sheet_id,
+                    range=f"{dashboard_sheet}!D6",
+                    valueInputOption="RAW",
+                    body={"values": matching_rows}
+                ).execute()
+                logger.info(f"Dashboard filtered results updated for status: {status}")
+            else:
+                logger.info(f"No matching rows to display for status: {status}")
+        except Exception as e:
+            logger.error(f"Failed to update dashboard filtered results: {e}")
+
+    def get_status_summary(self):
+        """Get a summary of all unique statuses and their counts."""
+        try:
+            values = self.get_all_rows()
+            if not values or len(values) < 2:
+                return {}
+            
+            headers = values[0]
+            if "Status" not in headers:
+                return {}
+            
+            status_idx = headers.index("Status")
+            status_counts = {}
+            
+            for row in values[1:]:
+                row_status = row[status_idx].strip() if len(row) > status_idx else "Unknown"
+                status_counts[row_status] = status_counts.get(row_status, 0) + 1
+            
+            logger.info(f"Status summary: {status_counts}")
+            return status_counts
+        except Exception as e:
+            logger.error(f"Error getting status summary: {e}")
+            return {}
+
+    def display_rows_by_status(self, status):
+        """
+        Display all rows for a given status and update the dashboard.
+        
+        Args:
+            status (str): The status to filter by (e.g., "Success", "Failed", "Pending")
+        
+        Returns:
+            list: List of rows matching the status
+        """
+        matching_rows = self.get_rows_by_status(status)
+        self.update_dashboard_filtered_results(status)
+        return matching_rows
 
     def log_execution(self, topic, status, url="", error="", model="deepseek-v4-flash", product_count=0):
         """Log the detailed execution history of a single row into 'Execution Logs' tab."""

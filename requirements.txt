@@ -7,3 +7,4 @@ python-slugify
 requests
 tenacity
 google-cloud-storage
+tabulate
