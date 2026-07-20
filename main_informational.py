@@ -5,6 +5,8 @@ from core.sheets_manager import SheetsManager
 from core.content_generator import ContentGenerator
 from core.blogger_publisher import BloggerPublisher
 from core.internal_linker import InternalLinkManager
+from core.notifier import EmailNotifier
+from utils.image_optimizer import ImageOptimizer
 
 logger = get_logger("main_informational")
 
@@ -15,8 +17,6 @@ def main():
     logger.info("Starting Informational Publishing Workflow.")
 
     # Connect to the Informational_Topics worksheet.
-    # SheetsManager already supports sheet_name as a constructor parameter,
-    # so no changes to the existing commercial integration are required.
     sheets = SheetsManager(
         settings.GOOGLE_SHEET_ID,
         settings.GCP_SERVICE_ACCOUNT,
@@ -34,63 +34,127 @@ def main():
     topic = row.get("Topic", "")
     keyword = row.get("Keyword", "")
     category = row.get("Category", "")
+    row_index = row["row_index"]
 
     # Mark the row as Processing using the existing SheetsManager method.
-    # Reuses the same update_row_status() used by the commercial workflow.
-    sheets.update_row_status(row["row_index"], "Processing")
+    sheets.update_row_status(row_index, "Processing")
     print("Status updated to Processing.\n")
 
     print(f"Topic:\n{topic}\n")
     print(f"Keyword:\n{keyword}\n")
     print(f"Category:\n{category}\n")
 
-    # Generate the content blueprint using the shared ContentGenerator.
-    # Reuses: existing Deepseek client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
+    # Initialize shared components
     generator = ContentGenerator()
-    blueprint = generator.generate_informational_blueprint(topic, keyword, category)
+    publisher = BloggerPublisher(settings.BLOGGER_BLOG_ID)
+    notifier = EmailNotifier()
+    optimizer = ImageOptimizer()
+    link_manager = InternalLinkManager(publisher)
 
-    print("--- Content Blueprint ---\n")
-    print(blueprint)
-    print("\n-------------------------")
+    try:
+        # --- STAGE 1: Generate Content Blueprint ---
+        logger.info("Stage 1/8: Generating content blueprint")
+        print("--- STAGE 1: Generating Content Blueprint ---")
+        blueprint = generator.generate_informational_blueprint(topic, keyword, category)
+        logger.info("Content blueprint generated successfully")
+        print("Blueprint generated successfully.\n")
 
-    # Generate the complete informational article based on the blueprint.
-    # Reuses: existing Deepseek client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
-    article = generator.generate_informational_article(blueprint, topic, keyword, category)
+        # --- STAGE 2: Generate Complete Article ---
+        logger.info("Stage 2/8: Generating informational article")
+        print("--- STAGE 2: Generating Informational Article ---")
+        article = generator.generate_informational_article(blueprint, topic, keyword, category)
+        logger.info("Informational article generated successfully")
+        print("Article generated successfully.\n")
 
-    print("\n--- Generated Informational Article ---\n")
-    print(article)
-    print("\n---------------------------------------")
+        # --- STAGE 3: Generate Image Plan ---
+        logger.info("Stage 3/8: Generating image plan")
+        print("--- STAGE 3: Generating Image Plan ---")
+        image_plan = generator.generate_image_plan(blueprint, article, topic, keyword, category)
+        logger.info("Image plan generated successfully")
+        print("Image plan generated successfully.\n")
 
-    # Generate the structured image plan based on the blueprint and article.
-    # Reuses: existing Deepseek client, generate_section(), SYSTEM_PROMPT, retry decorator, logger.
-    image_plan = generator.generate_image_plan(blueprint, article, topic, keyword, category)
+        # --- STAGE 4: Generate, Optimize, Upload Images ---
+        logger.info("Stage 4/8: Generating and uploading article images")
+        print("--- STAGE 4: Generating and Uploading Images ---")
+        image_manifest = generator.generate_article_images(image_plan, topic)
+        logger.info(f"Image manifest created with {len(image_manifest)} images")
+        print(f"Image manifest created with {len(image_manifest)} images.\n")
 
-    print("\n--- Generated Image Plan ---\n")
-    print(image_plan)
-    print("\n----------------------------")
+        # --- STAGE 5: Inject Images into Article ---
+        logger.info("Stage 5/8: Injecting images into article")
+        print("--- STAGE 5: Injecting Images into Article ---")
+        html_with_images = generator.inject_images_into_article(article, image_manifest)
+        logger.info("Images injected into article successfully")
+        print("Images injected successfully.\n")
 
-    # Generate, optimize, and upload images based on the image plan.
-    image_manifest = generator.generate_article_images(image_plan, topic)
+        # --- STAGE 6: Internal Linking ---
+        logger.info("Stage 6/8: Generating internal links")
+        print("--- STAGE 6: Generating Internal Links ---")
+        link_manager.refresh_corpus()
+        final_html = link_manager.link_informational_article(html_with_images, topic, category)
+        logger.info("Internal links generated successfully")
+        print("Internal links generated successfully.\n")
 
-    print("\n--- Image Manifest ---\n")
-    for img in image_manifest:
-        print(f"Image {img['image_number']}")
-        print(f"Placement: {img['placement']}")
-        print(f"Reference Heading: {img['reference_heading']}")
-        print(f"CDN URL: {img['cdn_url']}")
-        print(f"Alt Text: {img['alt_text']}")
-        print(f"Caption: {img['caption']}")
-        print("-" * 60)
-    print("\n----------------------")
+        # --- STAGE 7: Blogger Publishing ---
+        logger.info("Stage 7/8: Publishing to Blogger")
+        print("--- STAGE 7: Publishing to Blogger ---")
+        seo_labels = generator.generate_seo_tags(topic, keyword)
+        if category not in seo_labels:
+            seo_labels.append(category)
+        
+        published_url, post_id = publisher.publish_post(topic, final_html, labels=seo_labels)
+        logger.info(f"Article published successfully: {published_url} (Post ID: {post_id})")
+        print(f"Published to Blogger: {published_url}")
+        print(f"Post ID: {post_id}\n")
 
-    # Assemble the final HTML by injecting images into the article
-    final_html = generator.inject_images_into_article(article, image_manifest)
+        # --- STAGE 8: Google Sheets Updates ---
+        logger.info("Stage 8/8: Updating Google Sheets")
+        print("--- STAGE 8: Updating Google Sheets ---")
+        sheets.update_row_status(row_index, "Success", url=published_url, post_id=post_id)
+        sheets.update_dashboard_stats("Success")
+        sheets.log_execution(topic, "Success", url=published_url, post_id=post_id)
+        logger.info("Google Sheets updated successfully")
+        print("Google Sheets updated successfully.\n")
 
-    print("\n--- Final Assembled HTML Article ---\n")
-    print(final_html)
-    print("\n------------------------------------")
+        # --- SUCCESS: Send Email Notification ---
+        success_message = f"Informational article published successfully.\n\nTopic: {topic}\nURL: {published_url}\nPost ID: {post_id}"
+        notifier.send_report("Informational Article Published", topic, success_message)
+        logger.info("Success email notification sent")
 
-    print("\nWorkflow completed successfully.")
+        print("\n========================================")
+        print("WORKFLOW COMPLETED SUCCESSFULLY")
+        print("========================================")
+        print(f"Topic: {topic}")
+        print(f"Published URL: {published_url}")
+        print(f"Post ID: {post_id}")
+        print(f"Images: {len(image_manifest)}")
+        print(f"Internal Links: Added via InternalLinkManager")
+        print("========================================\n")
+
+    except Exception as e:
+        logger.error(f"Informational workflow failed: {e}", exc_info=True)
+        
+        # Update Google Sheets with failure
+        try:
+            sheets.update_row_status(row_index, "Failed", error=str(e))
+            sheets.update_dashboard_stats("Failed")
+            sheets.log_execution(topic, "Failed", error=str(e))
+        except Exception as sheet_err:
+            logger.error(f"Failed to update Google Sheets on error: {sheet_err}")
+
+        # Send failure email
+        try:
+            notifier.send_report("Informational Article Failed", topic, f"Failure reason: {e}")
+        except Exception as email_err:
+            logger.error(f"Failed to send failure email: {email_err}")
+
+        print(f"\nWorkflow FAILED: {e}")
+        sys.exit(1)
+    
+    finally:
+        # Clean up temporary image files
+        optimizer.cleanup()
+        logger.info("Temporary image files cleaned up")
 
 
 if __name__ == "__main__":

@@ -389,3 +389,232 @@ class ContentGenerator:
         final_html = str(soup) + "\n" + schema_html
         
         return self._apply_quality_corrections(final_html, topic, keyword)
+
+    def generate_informational_blueprint(self, topic: str, keyword: str, category: str) -> str:
+        """Generate a content planning blueprint for an informational article."""
+        logger.info(f"Generating informational blueprint for: {topic}")
+        prompt = INFORMATIONAL_BLUEPRINT_TEMPLATE.format(
+            topic=topic,
+            keyword=keyword,
+            category=category
+        )
+        return self.generate_section(prompt, model="deepseek-v4-flash")
+
+    def generate_informational_article(self, blueprint: str, topic: str, keyword: str, category: str) -> str:
+        """Generate a complete informational article from a blueprint."""
+        logger.info(f"Generating informational article for: {topic}")
+        prompt = INFORMATIONAL_ARTICLE_TEMPLATE.format(
+            topic=topic,
+            keyword=keyword,
+            category=category,
+            blueprint=blueprint
+        )
+        article_html = self.generate_section(prompt, model="gpt-4o-mini")
+        # Clean markdown if AI wrapped it
+        if article_html.startswith("```html"):
+            article_html = article_html.split("```html")[1].split("```")[0].strip()
+        elif article_html.startswith("```"):
+            article_html = article_html.split("```")[1].split("```")[0].strip()
+        return sanitize_html(article_html)
+
+    def generate_image_plan(self, blueprint: str, article: str, topic: str, keyword: str, category: str) -> str:
+        """Generate a structured image plan for the informational article."""
+        logger.info(f"Generating image plan for: {topic}")
+        prompt = INFORMATIONAL_IMAGE_PLAN_TEMPLATE.format(
+            topic=topic,
+            keyword=keyword,
+            category=category,
+            blueprint=blueprint,
+            article=article
+        )
+        return self.generate_section(prompt, model="deepseek-v4-flash")
+
+    def generate_article_images(self, image_plan: str, topic: str) -> list:
+        """Parse image plan and generate/optimize/upload images, returning manifest."""
+        logger.info(f"Generating article images for: {topic}")
+        
+        # Parse image plan to extract image details
+        images = self._parse_image_plan(image_plan)
+        if not images:
+            logger.warning("No images found in image plan")
+            return []
+        
+        optimizer = ImageOptimizer()
+        uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
+        manifest = []
+        
+        try:
+            for img in images:
+                img_num = img.get("image_number", len(manifest) + 1)
+                purpose = img.get("purpose", "")
+                placement = img.get("placement", "")
+                reference_heading = img.get("reference_heading", "")
+                style = img.get("style", "Realistic Workspace")
+                aspect_ratio = img.get("aspect_ratio", "16:9")
+                prompt = img.get("prompt", "")
+                alt_text = img.get("alt_text", "")
+                caption = img.get("caption", "")
+                
+                logger.info(f"Generating image {img_num}: {purpose}")
+                
+                # Generate image via Deepseek (using DALL-E or similar through API)
+                # For now, we'll use a placeholder approach - the actual image generation
+                # would be done via an image generation API
+                generated_image_url = self._generate_image_via_api(prompt, style, aspect_ratio)
+                
+                if generated_image_url:
+                    # Download, optimize, and upload to GCS
+                    temp_webp, img_w, img_h = optimizer.process_from_url(generated_image_url, f"{topic}-img{img_num}")
+                    if temp_webp:
+                        cdn_url = uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
+                        if cdn_url:
+                            manifest.append({
+                                "image_number": img_num,
+                                "purpose": purpose,
+                                "placement": placement,
+                                "reference_heading": reference_heading,
+                                "style": style,
+                                "aspect_ratio": aspect_ratio,
+                                "prompt": prompt,
+                                "alt_text": alt_text,
+                                "caption": caption,
+                                "cdn_url": cdn_url,
+                                "width": img_w,
+                                "height": img_h
+                            })
+                            logger.info(f"Image {img_num} uploaded to CDN: {cdn_url}")
+                        else:
+                            logger.error(f"Failed to upload image {img_num} to GCS")
+                    else:
+                        logger.error(f"Failed to optimize image {img_num}")
+                else:
+                    logger.error(f"Failed to generate image {img_num}")
+            
+            return manifest
+        finally:
+            optimizer.cleanup()
+
+    def _parse_image_plan(self, image_plan: str) -> list:
+        """Parse the text-based image plan into structured data."""
+        images = []
+        current_image = {}
+        
+        for line in image_plan.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            
+            if line.startswith("Image Number:"):
+                if current_image:
+                    images.append(current_image)
+                current_image = {"image_number": line.split(":", 1)[1].strip()}
+            elif line.startswith("Purpose:"):
+                current_image["purpose"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Placement:"):
+                current_image["placement"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Reference Heading:"):
+                current_image["reference_heading"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Image Style:"):
+                current_image["style"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Aspect Ratio:"):
+                current_image["aspect_ratio"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Prompt:"):
+                current_image["prompt"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Alt Text:"):
+                current_image["alt_text"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Caption:"):
+                current_image["caption"] = line.split(":", 1)[1].strip()
+            elif line.startswith("---"):
+                continue
+        
+        if current_image:
+            images.append(current_image)
+        
+        return images
+
+    def _generate_image_via_api(self, prompt: str, style: str, aspect_ratio: str) -> str:
+        """Generate an image via the Deepseek API (or configured image generation service)."""
+        # Use the existing Deepseek client to call an image generation endpoint
+        # This is a placeholder - actual implementation depends on available API
+        try:
+            # Build a detailed prompt for the image generation model
+            enhanced_prompt = f"{prompt}, {style.lower()}, aspect ratio {aspect_ratio}, professional editorial photography, high quality, no text, no watermarks, no logos, no brand names"
+            
+            # Call the image generation API through Deepseek
+            response = self.client.chat.completions.create(
+                model="deepseek-v4-flash",
+                messages=[
+                    {"role": "system", "content": "You are an image generation prompt enhancer. Return only a JSON object with a single 'image_url' field containing a placeholder or generated image URL."},
+                    {"role": "user", "content": f"Generate an image URL for: {enhanced_prompt}"}
+                ],
+                temperature=0.7,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            return result.get("image_url", "")
+        except Exception as e:
+            logger.error(f"Image generation API call failed: {e}")
+            return ""
+
+    def inject_images_into_article(self, article_html: str, image_manifest: list) -> str:
+        """Inject generated images into the article HTML at specified placements."""
+        logger.info("Injecting images into article")
+        soup = BeautifulSoup(article_html, 'html.parser')
+        
+        for img_data in image_manifest:
+            img_num = img_data.get("image_number", 0)
+            placement = img_data.get("placement", "")
+            reference_heading = img_data.get("reference_heading", "")
+            cdn_url = img_data.get("cdn_url", "")
+            alt_text = img_data.get("alt_text", "")
+            caption = img_data.get("caption", "")
+            width = img_data.get("width", "")
+            height = img_data.get("height", "")
+            
+            if not cdn_url:
+                logger.warning(f"Image {img_num} has no CDN URL, skipping")
+                continue
+            
+            # Build image HTML with proper attributes
+            width_attr = f' width="{width}"' if width else ''
+            height_attr = f' height="{height}"' if height else ''
+            
+            figure_html = f"""
+            <figure style="margin: 40px 0; text-align: center;">
+                <img src="{cdn_url}" alt="{alt_text}"{width_attr}{height_attr} loading="lazy" decoding="async" style="max-width: 100%; height: auto; border-radius: 8px;">
+                <figcaption style="margin-top: 12px; font-size: 0.9em; color: #666; font-style: italic;">{caption}</figcaption>
+            </figure>
+            """
+            
+            # Find insertion point based on reference heading
+            inserted = False
+            if reference_heading:
+                for heading in soup.find_all(['h2', 'h3']):
+                    if reference_heading.lower() in heading.get_text().lower():
+                        heading.insert_after(BeautifulSoup(figure_html, 'html.parser'))
+                        inserted = True
+                        logger.info(f"Injected image {img_num} after heading: {reference_heading}")
+                        break
+            
+            # Fallback: try to find by placement description
+            if not inserted and placement:
+                # Try to find relevant section
+                for heading in soup.find_all(['h2', 'h3']):
+                    heading_text = heading.get_text().lower()
+                    if any(keyword in heading_text for keyword in placement.lower().split()):
+                        heading.insert_after(BeautifulSoup(figure_html, 'html.parser'))
+                        inserted = True
+                        logger.info(f"Injected image {img_num} near placement: {placement}")
+                        break
+            
+            # Final fallback: append before footer or at end
+            if not inserted:
+                footer = soup.find('footer')
+                if footer:
+                    footer.insert_before(BeautifulSoup(figure_html, 'html.parser'))
+                else:
+                    soup.append(BeautifulSoup(figure_html, 'html.parser'))
+                logger.info(f"Injected image {img_num} at fallback position")
+        
+        return str(soup)
