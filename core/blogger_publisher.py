@@ -3,9 +3,58 @@ from googleapiclient.discovery import build
 from config.logger import get_logger
 from config import settings
 from utils.retry import get_retry_decorator
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 
 logger = get_logger(__name__)
+
+
+def insert_jump_break(html: str) -> str:
+    """Insert Blogger jump break (<!--more-->) into HTML content.
+    
+    Rules:
+    1. If <!--more--> already exists, return unchanged
+    2. Find first <h2> and insert before it
+    3. If no H2, insert after second </p>
+    4. If fewer than 2 paragraphs, insert before </body> or at end
+    
+    Args:
+        html: HTML content string
+        
+    Returns:
+        HTML with jump break inserted
+    """
+    if not html:
+        return html
+    
+    # Check if jump break already exists
+    if '<!--more-->' in html:
+        return html
+    
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Rule 2: Find first H2
+    first_h2 = soup.find('h2')
+    if first_h2:
+        first_h2.insert_before(Comment('more'))
+        return str(soup)
+    
+    # Rule 3: Find paragraphs and insert after second </p>
+    paragraphs = soup.find_all('p')
+    if len(paragraphs) >= 2:
+        # Insert after the second paragraph
+        second_p = paragraphs[1]
+        second_p.insert_after(Comment('more'))
+        return str(soup)
+    
+    # Rule 4: Fewer than 2 paragraphs - insert before </body> or at end
+    body = soup.find('body')
+    if body:
+        body.append(Comment('more'))
+    else:
+        # No body tag, append at end
+        soup.append(Comment('more'))
+    
+    return str(soup)
 
 
 def validate_content(content: str, min_length: int = 100) -> bool:
@@ -70,6 +119,9 @@ class BloggerPublisher:
         if labels is None:
             labels = []
             
+        # Insert jump break before publishing
+        content = insert_jump_break(content)
+        
         # Validate content before publishing
         if not validate_content(content):
             raise ValueError("Content validation failed - cannot publish")
@@ -101,8 +153,10 @@ class BloggerPublisher:
     @get_retry_decorator()
     def update_post(self, post_id, post_body):
         """Update an existing post."""
-        # Validate content if present
+        # Insert jump break if content is being updated
         if 'content' in post_body:
+            post_body['content'] = insert_jump_break(post_body['content'])
+            # Validate content if present
             if not validate_content(post_body['content']):
                 raise ValueError("Content validation failed - cannot update")
         return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post_body).execute()
