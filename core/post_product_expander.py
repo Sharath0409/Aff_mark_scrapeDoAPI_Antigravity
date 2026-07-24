@@ -63,6 +63,262 @@ def _count_product_sections(html_content: str) -> int:
     return len(sections)
 
 
+def _find_suitable_parent(tag):
+    """Find specific section wrapper parent without selecting the root container."""
+    if not tag:
+        return None
+    parent = tag.parent
+    while parent and parent.name in ['div', 'section']:
+        classes = parent.get('class', [])
+        if isinstance(classes, list) and ('blog-container' in classes or 'article-container' in classes):
+            break
+        if parent.name == 'section' or (isinstance(classes, list) and any(c in classes for c in ['comparison-table-wrapper', 'faq-section', 'product-section', 'quick-summary-box'])):
+            return parent
+        parent = parent.parent
+    return tag
+
+
+def repair_article_structure(html_content: str) -> Tuple[str, bool]:
+    """Parse HTML and ensure article follows strict sequence:
+    Quick Summary -> Product Reviews (P1..Pn) -> Comparison Table -> FAQ -> Conclusion -> Disclaimer -> Related Articles
+
+    If any product review (e.g. Product 4 or Product 5) appears below Comparison Table,
+    FAQ, Conclusion/Wrapping Up, Disclaimer, or Related Articles, or if section sequence
+    is violated, automatically repair the article by moving DOM elements without regenerating content.
+
+    Returns:
+        Tuple[repaired_html_str, was_repaired_bool]
+    """
+    if not html_content or not html_content.strip():
+        return html_content, False
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 1. Identify Product Review Sections
+    product_sections = soup.find_all('section', class_='product-section')
+    if not product_sections:
+        product_sections = soup.find_all('div', class_='product-section')
+    if not product_sections:
+        product_sections = []
+        for h3 in soup.find_all('h3', class_='product-title'):
+            parent = _find_suitable_parent(h3)
+            if parent and parent not in product_sections:
+                product_sections.append(parent)
+
+    if not product_sections:
+        return html_content, False
+
+    # 2. Identify Boundary Sections
+    # A) Comparison Table
+    comp_wrapper = soup.find(class_='comparison-table-wrapper')
+    if not comp_wrapper:
+        comp_table = soup.find('table', class_='comparison-table')
+        if comp_table:
+            comp_wrapper = _find_suitable_parent(comp_table)
+    if not comp_wrapper:
+        for tag in soup.find_all(['h2', 'h3']):
+            t_text = tag.get_text(strip=True).lower()
+            if any(kw in t_text for kw in ['at a glance', 'how they compare', 'comparison table']):
+                comp_wrapper = _find_suitable_parent(tag)
+                break
+
+    # B) FAQ Section
+    faq_section = soup.find(class_='faq-section')
+    if not faq_section:
+        for tag in soup.find_all(['h2', 'h3']):
+            t_text = tag.get_text(strip=True).lower()
+            if 'faq' in t_text or 'frequently asked' in t_text:
+                faq_section = _find_suitable_parent(tag)
+                break
+
+    # C) Wrapping Up / Conclusion Section
+    conclusion_section = None
+    for tag in soup.find_all(['h2', 'h3']):
+        t_text = tag.get_text(strip=True).lower()
+        if any(kw in t_text for kw in ['wrapping up', 'conclusion', 'final thought', 'final recommendation']):
+            conclusion_section = _find_suitable_parent(tag)
+            break
+        elif 'bottom line' in t_text:
+            if not tag.find_parent(class_='quick-summary-box'):
+                conclusion_section = _find_suitable_parent(tag)
+                break
+
+    # D) Disclaimer
+    disclaimer_section = soup.find('footer')
+    if not disclaimer_section:
+        for tag in soup.find_all(['div', 'p']):
+            if 'disclaimer:' in tag.get_text(strip=True).lower():
+                disclaimer_section = _find_suitable_parent(tag)
+                break
+
+    # E) Related Articles
+    related_section = soup.find(class_='related-articles')
+    if not related_section:
+        for tag in soup.find_all(['h2', 'h3', 'div']):
+            t_text = tag.get_text(strip=True).lower()
+            if any(kw in t_text for kw in ['you might also like', 'related articles']):
+                related_section = _find_suitable_parent(tag)
+                break
+
+    boundary_nodes = [b for b in [comp_wrapper, faq_section, conclusion_section, disclaimer_section, related_section] if b is not None]
+
+    # 3. Check for Sequence Violation / Misplaced Products
+    misplaced = False
+    all_nodes = list(soup.descendants)
+
+    for p in product_sections:
+        for b in boundary_nodes:
+            if b in p.parents:
+                misplaced = True
+                break
+            try:
+                if all_nodes.index(b) < all_nodes.index(p):
+                    misplaced = True
+                    break
+            except ValueError:
+                pass
+        if misplaced:
+            break
+
+    if not misplaced and len(boundary_nodes) > 1:
+        for i in range(len(boundary_nodes) - 1):
+            try:
+                idx1 = all_nodes.index(boundary_nodes[i])
+                idx2 = all_nodes.index(boundary_nodes[i + 1])
+                if idx1 > idx2:
+                    misplaced = True
+                    break
+            except ValueError:
+                pass
+
+    if not misplaced:
+        return html_content, False
+
+    # 4. Perform Structure Repair
+    logger.info("Repairing article structure sequence...")
+
+    # Extract all product section nodes in order
+    extracted_products = [p.extract() for p in product_sections]
+
+    # Extract all boundary section nodes upfront before reinserting
+    ordered_boundary_inputs = [
+        ('comp', comp_wrapper),
+        ('faq', faq_section),
+        ('conclusion', conclusion_section),
+        ('disclaimer', disclaimer_section),
+        ('related', related_section)
+    ]
+    extracted_boundaries = []
+    for label, b_node in ordered_boundary_inputs:
+        if b_node:
+            extracted_boundaries.append((label, b_node.extract()))
+
+    qs_anchor = soup.find(class_='quick-summary-box')
+    if not qs_anchor:
+        for tag in soup.find_all(['h2', 'h3']):
+            if any(kw in tag.get_text(strip=True).lower() for kw in ['quick summary', 'the bottom line']):
+                qs_anchor = _find_suitable_parent(tag)
+                break
+
+    if not qs_anchor:
+        qs_anchor = soup.find(['h1', 'h2', 'p'])
+
+    container = soup.find('div', class_='blog-container') or soup
+
+    current_point = qs_anchor
+    for p_node in extracted_products:
+        if current_point and current_point != container and current_point.parent:
+            current_point.insert_after(p_node)
+        else:
+            container.append(p_node)
+        current_point = p_node
+
+    for label, b_node in extracted_boundaries:
+        if current_point and current_point != container and current_point.parent:
+            current_point.insert_after(b_node)
+        else:
+            container.append(b_node)
+        current_point = b_node
+
+    return str(soup), True
+
+
+def validate_and_repair_recent_posts(publisher: BloggerPublisher, sheets: SheetsManager, count: int = 4) -> int:
+    """Validate and repair the structure of the FOUR most recently updated posts.
+
+    Retrieves Blogger posts, checks structure, and if Product 4 or 5 are below
+    Comparison Table, FAQ, Conclusion, Disclaimer, or Related Articles, repairs
+    the HTML by moving nodes without regenerating content.
+
+    Returns:
+        int: Number of posts repaired.
+    """
+    logger.info(f"Validating article structure for the {count} most recently updated posts...")
+    recent_info = sheets.get_recently_updated_posts(count=count)
+    
+    blogger_posts = publisher.list_all_posts(max_results=500)
+    if not blogger_posts:
+        return 0
+
+    posts_to_validate = []
+
+    if recent_info:
+        for info in recent_info:
+            topic = (info.get("topic") or "").strip().lower()
+            url = (info.get("url") or "").strip().lower()
+            matched = None
+            for p in blogger_posts:
+                p_url = (p.get("url") or "").strip().lower()
+                p_title = (p.get("title") or "").strip().lower()
+                if (url and url in p_url) or (topic and topic in p_title):
+                    matched = p
+                    break
+            if matched and matched not in posts_to_validate:
+                posts_to_validate.append(matched)
+
+    if len(posts_to_validate) < count:
+        sorted_posts = sorted(blogger_posts, key=lambda x: x.get("updated") or x.get("published") or "", reverse=True)
+        for p in sorted_posts:
+            if len(posts_to_validate) >= count:
+                break
+            if p not in posts_to_validate:
+                posts_to_validate.append(p)
+
+    repaired_count = 0
+
+    for post in posts_to_validate:
+        post_id = post.get("id")
+        title = post.get("title", "Untitled")
+        if not post_id:
+            continue
+
+        full_post = publisher.get_post(post_id)
+        content = full_post.get("content", "")
+        if not content.strip():
+            continue
+
+        repaired_html, was_repaired = repair_article_structure(content)
+        if was_repaired:
+            logger.info(f"Structure violation detected and repaired for post: '{title}' (ID: {post_id})")
+            update_body = {
+                "id": post_id,
+                "title": full_post.get("title", title),
+                "content": repaired_html,
+                "labels": full_post.get("labels", []),
+            }
+            try:
+                publisher.update_post(post_id, update_body)
+                sheets.log_review(title, "Repaired Structure", "Moved Product 4/5 before Comparison/FAQ/Conclusion", full_post.get("url", ""))
+                repaired_count += 1
+            except Exception as e:
+                logger.error(f"Failed to update repaired post ID {post_id}: {e}")
+        else:
+            logger.info(f"Article structure already valid for post: '{title}' (ID: {post_id})")
+
+    logger.info(f"Post update validation complete. Repaired {repaired_count}/{len(posts_to_validate)} validated post(s).")
+    return repaired_count
+
+
 def find_posts_under_5(publisher: BloggerPublisher, sheets: SheetsManager, count: int = 2) -> List[Dict]:
     """Find LIVE posts with fewer than 5 product sections.
 
@@ -80,7 +336,6 @@ def find_posts_under_5(publisher: BloggerPublisher, sheets: SheetsManager, count
         if status != "LIVE":
             continue
         
-        # Skip already expanded posts
         labels = [l.lower() for l in post.get("labels", []) if isinstance(l, str)]
         if EXPANDED_LABEL.lower() in labels:
             continue
@@ -89,7 +344,6 @@ def find_posts_under_5(publisher: BloggerPublisher, sheets: SheetsManager, count
         if not post_id:
             continue
 
-        # Fetch full content to count product sections
         full_post = publisher.get_post(post_id)
         content = full_post.get("content", "")
         product_count = _count_product_sections(content)
@@ -103,7 +357,6 @@ def find_posts_under_5(publisher: BloggerPublisher, sheets: SheetsManager, count
         logger.info("No posts found with fewer than 5 products.")
         return []
 
-    # Sort by published date ascending (oldest first)
     candidates.sort(key=lambda item: item[0] or "")
     selected = [item[1] for item in candidates[:count]]
     for s in selected:
@@ -167,7 +420,6 @@ def _generate_review_section(generator: ContentGenerator, product: Dict, topic: 
         features=product['features']
     )
     
-    # Build context similar to generate_full_post
     context = f"Current Article Context\nArticle Topic: {topic}\nPrimary Keyword: {keyword}\nProducts Reviewed:\n- {product['title']} | {product['price']} | {product['rating']} | URL: {product.get('url', '#')}\n\nPreviously Generated Sections:\n(None yet)\n=========================\n"
     
     full_prompt = context + prompt
@@ -175,65 +427,36 @@ def _generate_review_section(generator: ContentGenerator, product: Dict, topic: 
 
 
 def _inject_product_sections(html_content: str, new_products: List[Dict], generator: ContentGenerator, topic: str, keyword: str, insert_after_third: bool = False) -> str:
-    """Inject new product sections.
-    
-    Args:
-        html_content: The HTML content to modify
-        new_products: List of new product dictionaries
-        generator: ContentGenerator instance
-        topic: Article topic
-        keyword: Article keyword
-        insert_after_third: If True, insert after 3rd product section; otherwise before FAQ/conclusion
+    """Inject new product sections into the HTML.
+
+    Always places Product 4 immediately after Product 3, and Product 5 immediately after Product 4,
+    and runs structure repair to guarantee exact sequence:
+    Quick Summary -> Product Reviews -> Comparison Table -> FAQ -> Conclusion -> Disclaimer -> Related Articles
     """
     soup = BeautifulSoup(html_content, 'html.parser')
-    
-    if insert_after_third:
-        # Find the 3rd product section
-        product_sections = soup.find_all('section', class_='product-section')
-        if len(product_sections) >= 3:
-            insertion_point = product_sections[2]  # 3rd product (0-indexed)
-            insert_method = 'after'
-        else:
-            # Fallback: find FAQ/conclusion
-            insertion_point = None
-            for tag in soup.find_all(['h2', 'h3']):
-                text = tag.get_text(strip=True).lower()
-                if any(kw in text for kw in ['faq', 'frequently asked', 'conclusion', 'final thought', 'final recommendation', 'bottom line']):
-                    insertion_point = tag
-                    break
-            insert_method = 'before'
+    product_sections = soup.find_all('section', class_='product-section')
+    if not product_sections:
+        product_sections = soup.find_all('div', class_='product-section')
+
+    insertion_point = None
+    if len(product_sections) >= 3:
+        insertion_point = product_sections[2]
+    elif len(product_sections) > 0:
+        insertion_point = product_sections[-1]
     else:
-        # Original behavior: insert before FAQ/conclusion/footer
-        insertion_point = None
-        for tag in soup.find_all(['h2', 'h3']):
-            text = tag.get_text(strip=True).lower()
-            if any(kw in text for kw in ['faq', 'frequently asked', 'conclusion', 'final thought', 'final recommendation', 'bottom line']):
-                insertion_point = tag
-                break
-        insert_method = 'before'
-    
-    if not insertion_point:
-        # Fallback: before footer
-        footer = soup.find('footer')
-        if footer:
-            insertion_point = footer
-        else:
-            # Last resort: append to body
-            body = soup.find('div', class_='blog-container') or soup
-            insertion_point = body
-        insert_method = 'before'
-    
-    # Generate and inject each new product section
+        qs = soup.find(class_='quick-summary-box')
+        if qs:
+            insertion_point = qs
+
     for product in new_products:
         review_html = _generate_review_section(generator, product, topic, keyword)
-        
-        # Build product section HTML
+
         image_html = ""
         if product.get('image_url'):
             width_attr = f' width="{product.get("image_width")}"' if product.get("image_width") else ''
             height_attr = f' height="{product.get("image_height")}"' if product.get("image_height") else ''
             image_html = f'<div class="product-image-centered"><img src="{product["image_url"]}" alt="{product["title"]}"{width_attr}{height_attr} loading="lazy"></div>'
-        
+
         section_html = f"""
         <section class="product-section">
             <h3 class="product-title">{product['title']}</h3>
@@ -247,17 +470,17 @@ def _inject_product_sections(html_content: str, new_products: List[Dict], genera
             </div>
         </section>
         """
-        
-        # Parse and insert
+
         new_section = BeautifulSoup(section_html, 'html.parser')
-        if insert_method == 'after':
+        if insertion_point:
             insertion_point.insert_after(new_section)
-            # Update insertion_point to the newly inserted section for chaining
             insertion_point = new_section
         else:
-            insertion_point.insert_before(new_section)
-    
-    return str(soup)
+            soup.append(new_section)
+            insertion_point = new_section
+
+    repaired_html, _ = repair_article_structure(str(soup))
+    return repaired_html
 
 
 def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict, optimizer: ImageOptimizer = None, uploader: BloggerCDNUploader = None, insert_after_third: bool = False) -> bool:
@@ -284,7 +507,6 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
         logger.warning(f"Post '{title}' has no content. Skipping.")
         return False
 
-    # Get topic and keyword
     topic = title
     labels = full_post.get("labels", []) or []
     if isinstance(labels, str):
@@ -301,24 +523,31 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
 
     logger.info(f"Expanding post '{title}' (topic: {topic}, keyword: {keyword})")
 
-    # Get existing ASINs
     existing_asins = _get_existing_asins(content)
     current_count = _count_product_sections(content)
     needed = 5 - current_count
 
     if needed <= 0:
-        logger.info(f"Post '{title}' already has {current_count} products. Skipping.")
+        logger.info(f"Post '{title}' already has {current_count} products. Repairing structure if needed...")
+        repaired_html, was_repaired = repair_article_structure(content)
+        if was_repaired:
+            update_body = {
+                "id": post_id,
+                "title": full_post.get("title", title),
+                "content": repaired_html,
+                "labels": labels,
+            }
+            publisher.update_post(post_id, update_body)
+            logger.info(f"Repaired structure for already-5-product post ID: {post_id}")
         return True
 
     logger.info(f"Post has {current_count} products, need {needed} more.")
 
-    # Scrape new products
     new_products = _scrape_new_products(keyword, existing_asins, needed)
     if not new_products:
         logger.warning(f"No new products found for '{title}'. Skipping.")
         return False
 
-    # Process images for new products - use provided instances or create new ones
     local_optimizer = optimizer or ImageOptimizer()
     local_uploader = uploader or BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
     
@@ -335,22 +564,17 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
                         product['image_width'] = img_w
                         product['image_height'] = img_h
     finally:
-        # Only cleanup if we created our own optimizer
         if optimizer is None:
             local_optimizer.cleanup()
 
-    # Inject new product sections
-    # For the first 4 posts (oldest), insert after 3rd product section
     updated_html = _inject_product_sections(content, new_products, generator, topic, keyword, insert_after_third=insert_after_third)
 
-    # Apply quality corrections
     final_html = generator._apply_quality_corrections(updated_html, topic, keyword)
+    final_html, _ = repair_article_structure(final_html)
 
-    # Add Expanded to 5 label
     if EXPANDED_LABEL not in labels:
         labels.append(EXPANDED_LABEL)
 
-    # Update post on Blogger
     update_body = {
         "id": post_id,
         "title": full_post.get("title", title),
@@ -361,7 +585,6 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
         publisher.update_post(post_id, update_body)
         logger.info(f"Successfully expanded post ID: {post_id} with {len(new_products)} new products")
         
-        # Log to sheets
         sheets.log_review(topic, "Expanded to 5 Products", f"Added {len(new_products)} products", full_post.get("url", ""))
         return True
     except Exception as e:
@@ -373,13 +596,11 @@ def run_expand(publisher: BloggerPublisher, generator: ContentGenerator, sheets:
     """Find and expand up to `count` posts. Returns number of posts processed."""
     selected = find_posts_under_5(publisher, sheets, count=count)
     processed = 0
-    # Create shared optimizer/uploader if not provided
     local_optimizer = optimizer or ImageOptimizer()
     local_uploader = uploader or BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
     
     try:
         for idx, post in enumerate(selected):
-            # For first 4 posts (oldest), insert after 3rd product section
             insert_after_third = idx < 4
             if expand_post(publisher, generator, sheets, post, local_optimizer, local_uploader, insert_after_third):
                 processed += 1
@@ -387,5 +608,10 @@ def run_expand(publisher: BloggerPublisher, generator: ContentGenerator, sheets:
         if optimizer is None:
             local_optimizer.cleanup()
     
+    try:
+        validate_and_repair_recent_posts(publisher, sheets, count=4)
+    except Exception as e:
+        logger.error(f"Failed during post update validation pass: {e}")
+
     logger.info(f"Daily expand complete. Processed {processed}/{len(selected)} selected posts.")
     return processed

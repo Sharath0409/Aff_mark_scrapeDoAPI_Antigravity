@@ -266,6 +266,61 @@ class TestPostProductExpander:
         assert "B0B7654321" in asins
         assert len(asins) == 2
 
+    def test_repair_article_structure_moves_misplaced_products(self):
+        from core.post_product_expander import repair_article_structure
+
+        html = """
+        <div class="blog-container">
+            <h1>Best NAS Devices</h1>
+            <div class="quick-summary-box"><p>Quick summary here</p></div>
+            <section class="product-section"><h3>Product 1</h3></section>
+            <section class="product-section"><h3>Product 2</h3></section>
+            <section class="product-section"><h3>Product 3</h3></section>
+            <div class="comparison-table-wrapper"><table>Comparison Table</table></div>
+            <div class="faq-section"><h2>Frequently Asked Questions</h2></div>
+            <h2>Wrapping Up</h2>
+            <p>Conclusion text</p>
+            <section class="product-section"><h3>Product 4</h3><img src="img4.jpg" loading="lazy"></section>
+            <section class="product-section"><h3>Product 5</h3><img src="img5.jpg" loading="lazy"></section>
+            <footer><p>Disclaimer: affiliate link</p></footer>
+        </div>
+        """
+        repaired, was_repaired = repair_article_structure(html)
+        assert was_repaired is True
+
+        p4_idx = repaired.find("Product 4")
+        p5_idx = repaired.find("Product 5")
+        comp_idx = repaired.find("Comparison Table")
+        faq_idx = repaired.find("Frequently Asked Questions")
+        conc_idx = repaired.find("Wrapping Up")
+
+        # Product 4 and 5 must come BEFORE Comparison Table, FAQ, and Wrapping Up
+        assert p4_idx < comp_idx
+        assert p5_idx < comp_idx
+        assert comp_idx < faq_idx
+        assert faq_idx < conc_idx
+
+    def test_repair_article_structure_preserves_valid_sequence(self):
+        from core.post_product_expander import repair_article_structure
+
+        html = """
+        <div class="blog-container">
+            <h1>Best NAS Devices</h1>
+            <div class="quick-summary-box"><p>Quick summary here</p></div>
+            <section class="product-section"><h3>Product 1</h3></section>
+            <section class="product-section"><h3>Product 2</h3></section>
+            <section class="product-section"><h3>Product 3</h3></section>
+            <section class="product-section"><h3>Product 4</h3></section>
+            <section class="product-section"><h3>Product 5</h3></section>
+            <div class="comparison-table-wrapper"><table>Comparison Table</table></div>
+            <div class="faq-section"><h2>Frequently Asked Questions</h2></div>
+            <h2>Wrapping Up</h2>
+            <footer><p>Disclaimer: affiliate link</p></footer>
+        </div>
+        """
+        repaired, was_repaired = repair_article_structure(html)
+        assert was_repaired is False
+
 
 # Test ContentReviewer
 class TestContentReviewer:

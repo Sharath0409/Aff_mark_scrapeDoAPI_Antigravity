@@ -543,3 +543,45 @@ class SheetsManager:
             logger.info(f"Review record added to '{log_sheet}' for: {topic}")
         except Exception as e:
             logger.error(f"Failed to save review history: {e}")
+
+    def get_recently_updated_posts(self, count=4):
+        """Fetch the most recently updated/expanded posts from 'Review Logs' or 'Execution Logs'."""
+        topics = []
+        try:
+            log_sheet = "Review Logs"
+            result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{log_sheet}!A1:F500").execute()
+            values = result.get('values', [])
+            if values and len(values) > 1:
+                headers = values[0]
+                topic_idx = headers.index("Topic") if "Topic" in headers else 1
+                url_idx = headers.index("URL") if "URL" in headers else 5
+                for row in reversed(values[1:]):
+                    if len(topics) >= count:
+                        break
+                    topic = row[topic_idx] if len(row) > topic_idx else ""
+                    url = row[url_idx] if len(row) > url_idx else ""
+                    if topic and topic not in [t["topic"] for t in topics]:
+                        topics.append({"topic": topic, "url": url})
+        except Exception as e:
+            logger.warning(f"Could not fetch from Review Logs: {e}")
+
+        if len(topics) < count:
+            try:
+                log_sheet = "Execution Logs"
+                result = self.sheet.values().get(spreadsheetId=self.sheet_id, range=f"{log_sheet}!A1:G500").execute()
+                values = result.get('values', [])
+                if values and len(values) > 1:
+                    headers = values[0]
+                    topic_idx = headers.index("Topic") if "Topic" in headers else 1
+                    url_idx = headers.index("URL") if "URL" in headers else 5
+                    for row in reversed(values[1:]):
+                        if len(topics) >= count:
+                            break
+                        topic = row[topic_idx] if len(row) > topic_idx else ""
+                        url = row[url_idx] if len(row) > url_idx else ""
+                        if topic and topic not in [t["topic"] for t in topics]:
+                            topics.append({"topic": topic, "url": url})
+            except Exception as e:
+                logger.warning(f"Could not fetch from Execution Logs: {e}")
+
+        return topics
