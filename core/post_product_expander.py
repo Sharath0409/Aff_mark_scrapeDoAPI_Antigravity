@@ -174,17 +174,43 @@ def _generate_review_section(generator: ContentGenerator, product: Dict, topic: 
     return generator.generate_section(full_prompt, model="deepseek-v4-flash")
 
 
-def _inject_product_sections(html_content: str, new_products: List[Dict], generator: ContentGenerator, topic: str, keyword: str) -> str:
-    """Inject new product sections before FAQ/conclusion/footer."""
+def _inject_product_sections(html_content: str, new_products: List[Dict], generator: ContentGenerator, topic: str, keyword: str, insert_after_third: bool = False) -> str:
+    """Inject new product sections.
+    
+    Args:
+        html_content: The HTML content to modify
+        new_products: List of new product dictionaries
+        generator: ContentGenerator instance
+        topic: Article topic
+        keyword: Article keyword
+        insert_after_third: If True, insert after 3rd product section; otherwise before FAQ/conclusion
+    """
     soup = BeautifulSoup(html_content, 'html.parser')
     
-    # Find insertion point: before FAQ, conclusion, or footer
-    insertion_point = None
-    for tag in soup.find_all(['h2', 'h3']):
-        text = tag.get_text(strip=True).lower()
-        if any(kw in text for kw in ['faq', 'frequently asked', 'conclusion', 'final thought', 'final recommendation', 'bottom line']):
-            insertion_point = tag
-            break
+    if insert_after_third:
+        # Find the 3rd product section
+        product_sections = soup.find_all('section', class_='product-section')
+        if len(product_sections) >= 3:
+            insertion_point = product_sections[2]  # 3rd product (0-indexed)
+            insert_method = 'after'
+        else:
+            # Fallback: find FAQ/conclusion
+            insertion_point = None
+            for tag in soup.find_all(['h2', 'h3']):
+                text = tag.get_text(strip=True).lower()
+                if any(kw in text for kw in ['faq', 'frequently asked', 'conclusion', 'final thought', 'final recommendation', 'bottom line']):
+                    insertion_point = tag
+                    break
+            insert_method = 'before'
+    else:
+        # Original behavior: insert before FAQ/conclusion/footer
+        insertion_point = None
+        for tag in soup.find_all(['h2', 'h3']):
+            text = tag.get_text(strip=True).lower()
+            if any(kw in text for kw in ['faq', 'frequently asked', 'conclusion', 'final thought', 'final recommendation', 'bottom line']):
+                insertion_point = tag
+                break
+        insert_method = 'before'
     
     if not insertion_point:
         # Fallback: before footer
@@ -195,6 +221,7 @@ def _inject_product_sections(html_content: str, new_products: List[Dict], genera
             # Last resort: append to body
             body = soup.find('div', class_='blog-container') or soup
             insertion_point = body
+        insert_method = 'before'
     
     # Generate and inject each new product section
     for product in new_products:
@@ -223,15 +250,17 @@ def _inject_product_sections(html_content: str, new_products: List[Dict], genera
         
         # Parse and insert
         new_section = BeautifulSoup(section_html, 'html.parser')
-        if insertion_point:
-            insertion_point.insert_before(new_section)
+        if insert_method == 'after':
+            insertion_point.insert_after(new_section)
+            # Update insertion_point to the newly inserted section for chaining
+            insertion_point = new_section
         else:
-            soup.append(new_section)
+            insertion_point.insert_before(new_section)
     
     return str(soup)
 
 
-def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict, optimizer: ImageOptimizer = None, uploader: BloggerCDNUploader = None) -> bool:
+def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict, optimizer: ImageOptimizer = None, uploader: BloggerCDNUploader = None, insert_after_third: bool = False) -> bool:
     """Expand a single post to have 5 products.
     
     Args:
@@ -311,7 +340,8 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
             local_optimizer.cleanup()
 
     # Inject new product sections
-    updated_html = _inject_product_sections(content, new_products, generator, topic, keyword)
+    # For the first 4 posts (oldest), insert after 3rd product section
+    updated_html = _inject_product_sections(content, new_products, generator, topic, keyword, insert_after_third=insert_after_third)
 
     # Apply quality corrections
     final_html = generator._apply_quality_corrections(updated_html, topic, keyword)
@@ -348,8 +378,10 @@ def run_expand(publisher: BloggerPublisher, generator: ContentGenerator, sheets:
     local_uploader = uploader or BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
     
     try:
-        for post in selected:
-            if expand_post(publisher, generator, sheets, post, local_optimizer, local_uploader):
+        for idx, post in enumerate(selected):
+            # For first 4 posts (oldest), insert after 3rd product section
+            insert_after_third = idx < 4
+            if expand_post(publisher, generator, sheets, post, local_optimizer, local_uploader, insert_after_third):
                 processed += 1
     finally:
         if optimizer is None:
