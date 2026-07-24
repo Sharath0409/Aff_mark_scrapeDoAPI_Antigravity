@@ -483,6 +483,89 @@ def _inject_product_sections(html_content: str, new_products: List[Dict], genera
     return repaired_html
 
 
+def regenerate_comparison_table(html_content: str, generator: ContentGenerator, topic: str, keyword: str) -> str:
+    """Regenerate the comparison table to include all products now present in the article.
+
+    Extracts every product title + affiliate URL from product-section elements,
+    builds a fresh products_summary, calls the AI with COMPARISON_TEMPLATE,
+    and replaces the existing comparison-table-wrapper div in-place.
+
+    Returns the updated HTML string (unchanged if comparison table not found or AI fails).
+    """
+    from templates.prompts import COMPARISON_TEMPLATE
+
+    if not html_content or not html_content.strip():
+        return html_content
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 1. Collect all product data from the HTML
+    product_lines = []
+    for section in soup.find_all('section', class_='product-section'):
+        title_tag = section.find(class_='product-title')
+        title = title_tag.get_text(strip=True) if title_tag else "Unknown Product"
+        price_tag = section.find(class_='price-badge')
+        price = price_tag.get_text(strip=True).replace('Price:', '').strip() if price_tag else "Check Current Price"
+        buy_link = section.find('a', class_='buy-btn')
+        url = buy_link['href'] if buy_link and buy_link.get('href') else '#'
+        product_lines.append(f"- {title} | {price} | URL: {url}")
+
+    if not product_lines:
+        logger.warning("regenerate_comparison_table: no product sections found; skipping.")
+        return html_content
+
+    products_summary = "\n".join(product_lines)
+    logger.info(f"Regenerating comparison table for {len(product_lines)} products (topic: {topic})")
+
+    # 2. Generate updated comparison table via AI
+    prompt = (
+        f"Current Article Context\nArticle Topic: {topic}\nPrimary Keyword: {keyword}\n"
+        f"Products Reviewed:\n{products_summary}\n\n"
+        "=========================\n"
+        + COMPARISON_TEMPLATE
+        + f"\n\nHere are the products:\n{products_summary}"
+    )
+    try:
+        new_table_html = generator.generate_section(prompt, model="deepseek-v4-flash")
+    except Exception as e:
+        logger.error(f"regenerate_comparison_table: AI call failed: {e}")
+        return html_content
+
+    if not new_table_html or not new_table_html.strip():
+        logger.warning("regenerate_comparison_table: AI returned empty content; keeping old table.")
+        return html_content
+
+    # 3. Replace the existing comparison-table-wrapper div in-place
+    old_wrapper = soup.find(class_='comparison-table-wrapper')
+    if not old_wrapper:
+        # Fallback: look for table.comparison-table directly
+        old_table = soup.find('table', class_='comparison-table')
+        if old_table:
+            old_wrapper = old_table.parent
+
+    if not old_wrapper:
+        # No existing wrapper: append just before FAQ
+        logger.warning("regenerate_comparison_table: no existing comparison wrapper found; will append.")
+        faq = soup.find(class_='faq-section')
+        insert_target = faq or soup.find(['footer']) or None
+        new_wrapper_soup = BeautifulSoup(
+            f'<div class="comparison-table-wrapper">{new_table_html}</div>', 'html.parser'
+        )
+        if insert_target:
+            insert_target.insert_before(new_wrapper_soup)
+        else:
+            soup.append(new_wrapper_soup)
+    else:
+        # Replace existing wrapper content
+        new_wrapper_soup = BeautifulSoup(
+            f'<div class="comparison-table-wrapper">{new_table_html}</div>', 'html.parser'
+        )
+        old_wrapper.replace_with(new_wrapper_soup)
+
+    logger.info("Comparison table successfully regenerated with all products.")
+    return str(soup)
+
+
 def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets: SheetsManager, post: Dict, optimizer: ImageOptimizer = None, uploader: BloggerCDNUploader = None, insert_after_third: bool = False) -> bool:
     """Expand a single post to have 5 products.
     
@@ -571,6 +654,14 @@ def expand_post(publisher: BloggerPublisher, generator: ContentGenerator, sheets
 
     final_html = generator._apply_quality_corrections(updated_html, topic, keyword)
     final_html, _ = repair_article_structure(final_html)
+
+    # Regenerate comparison table to include all products (old 3 + new 2)
+    logger.info("Regenerating comparison table to reflect all expanded products...")
+    try:
+        final_html = regenerate_comparison_table(final_html, generator, topic, keyword)
+        final_html, _ = repair_article_structure(final_html)  # One final structure pass after table update
+    except Exception as e:
+        logger.error(f"Comparison table regeneration failed (non-fatal): {e}")
 
     if EXPANDED_LABEL not in labels:
         labels.append(EXPANDED_LABEL)

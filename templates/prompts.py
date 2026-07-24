@@ -165,9 +165,9 @@ Instructions:
 4. No Duplicates: Every comparison row must be unique. No repeated attributes (e.g., no multiple "Weight" or "Battery" rows).
 5. Verdict Row: Generate a 'Verdict' row (e.g., Best Overall, Best Budget, Best Specialized Choice) ONLY if supported by the reviewed products. The verdict must reference products already discussed. Never invent new recommendations.
 6. Price Handling: If current pricing is available from the supplied data, display it. If pricing is unavailable, display "Check Current Price". NEVER invent prices.
-7. HTML Requirements: Preserve existing HTML structure. Use <table class="comparison-table">. The last row must be 'Verdict' with a button-styled link: <a href="link" class="btn">Check Current Price</a>. Do not change CSS classes, button styling, or layout.
+7. HTML Requirements: Use <table class="comparison-table"> with a proper <thead> block containing product names in <th> elements, and a <tbody> block containing the attribute rows in <tr><td> elements. The first <th> in <thead> and the first <td> in each row must be the attribute label. The last <tbody> row must be the 'Verdict' row. Each Verdict cell must contain a button-styled link: <a href="link" class="btn">Check Current Price</a>. Do NOT use <th> inside <tbody>. Do NOT change CSS classes, button styling, or layout.
 8. US Focus & Readability: Write for US buyers in American English, highlighting differences important to remote workers, home office users, freelancers, and knowledge workers. Keep rows concise, avoid unnecessary technical jargon, and highlight practical buying differences.
-9. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%. If validation fails, automatically regenerate until it succeeds.
+9. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%, 7) Table uses <thead> and <tbody> correctly. If validation fails, automatically regenerate until it succeeds.
 """
 
 FAQ_TEMPLATE = """

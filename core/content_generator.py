@@ -226,10 +226,20 @@ class ContentGenerator:
             .cons-list h4 { color: #dc2626; margin-top: 0; }
             .buy-button-wrapper { text-align: center; margin-top: 40px; }
             .buy-btn { display: inline-block; background: #fbbf24; color: #000 !important; padding: 16px 40px; border-radius: 4px; text-decoration: none !important; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #d97706; transition: all 0.2s; }
-            .comparison-table-wrapper { overflow-x: auto; margin: 40px 0; border: 1px solid #eee; border-radius: 8px; }
-            .comparison-table { width: 100%; border-collapse: collapse; min-width: 600px; }
-            .comparison-table td, .comparison-table th { padding: 15px; border: 1px solid #eee; font-size: 0.95em; }
-            .comparison-table th { background: #f8fafc; color: #475569; font-weight: 700; text-align: left; }
+            .comparison-table-wrapper { overflow-x: auto; margin: 48px 0; border: 1px solid #dde3ef; border-radius: 14px; box-shadow: 0 4px 24px rgba(59,130,246,0.08); background: #fff; }
+            .comparison-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 640px; font-family: inherit; }
+            .comparison-table thead tr th { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; font-weight: 800; font-size: 0.92em; letter-spacing: 0.04em; text-transform: uppercase; padding: 16px 18px; border-bottom: 3px solid #1d4ed8; text-align: center; }
+            .comparison-table thead tr th:first-child { text-align: left; border-radius: 14px 0 0 0; min-width: 150px; background: linear-gradient(135deg, #0f2a4a 0%, #1e3a5f 100%); }
+            .comparison-table thead tr th:last-child { border-radius: 0 14px 0 0; }
+            .comparison-table tbody tr:nth-child(even) { background: #f1f5fb; }
+            .comparison-table tbody tr:nth-child(odd) { background: #ffffff; }
+            .comparison-table tbody tr:hover { background: #dbeafe; transition: background 0.18s; }
+            .comparison-table td { padding: 13px 18px; border-bottom: 1px solid #e2e8f0; font-size: 0.94em; color: #1e293b; text-align: center; vertical-align: middle; }
+            .comparison-table td:first-child { font-weight: 700; color: #1e3a5f; text-align: left; background: inherit; border-right: 3px solid #dde3ef; font-size: 0.91em; text-transform: uppercase; letter-spacing: 0.03em; }
+            .comparison-table tbody tr:last-child td { border-bottom: none; font-weight: 700; background: linear-gradient(135deg, #fef9ec 0%, #fef3c7 100%); color: #92400e; font-size: 0.95em; }
+            .comparison-table tbody tr:last-child td:first-child { color: #78350f; border-right: 3px solid #fcd34d; }
+            .comparison-table .btn { display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff !important; padding: 8px 18px; border-radius: 6px; text-decoration: none !important; font-weight: 700; font-size: 0.86em; letter-spacing: 0.03em; transition: background 0.2s; white-space: nowrap; box-shadow: 0 2px 6px rgba(217,119,6,0.3); }
+            .comparison-table .btn:hover { background: linear-gradient(135deg, #d97706, #b45309); }
             .quick-summary-box { background: #fffbeb; border: 1px solid #fef3c7; padding: 25px; border-radius: 12px; margin: 40px 0; }
             @media (max-width: 640px) { .pros-cons-grid { grid-template-columns: 1fr; } .product-title { font-size: 1.6em; } }
         </style>
