@@ -62,6 +62,25 @@ Naturally recommend related article opportunities throughout the content.
 Prioritize originality, practical value, and trustworthiness over content length. Never generate content solely to fill word count.
 
 ==========================================================
+EVERGREEN CONTENT POLICY (APPLIES TO EVERY SECTION)
+==========================================================
+
+Generate evergreen content. Do NOT mention calendar years (2024, 2025, 2026, etc.) in titles, headings, metadata, body content, image prompts, or SEO fields unless the year is an objective factual requirement.
+
+Factual year exceptions (PRESERVE these):
+- OSHA updated guidance in 2024
+- Product released in 2025
+- Windows 11 24H2
+- Version numbers containing years (e.g., 24H2, 23H2)
+
+Marketing years to REMOVE:
+- "Best of 2024", "2025 Guide", "for 2024", "in 2025"
+- "Updated for 2024", "2024 Review", "Top Picks 2025"
+- Any year used for marketing freshness rather than factual accuracy
+
+Before returning ANY generated section, verify no marketing-style years are present. If found, rewrite to be evergreen (e.g., "Best Ergonomic Chairs" instead of "Best Ergonomic Chairs 2024").
+
+==========================================================
 GLOBAL QUALITY POLICY (APPLIES TO EVERY SECTION)
 ==========================================================
 
@@ -113,6 +132,7 @@ Before returning ANY generated section verify:
 7. US focused
 8. EEAT compliant
 9. Helpful Content compliant
+10. Evergreen content (no marketing years)
 If validation fails, automatically regenerate that section until validation succeeds."""
 
 
@@ -127,7 +147,8 @@ Instructions:
 5. Trust Rules: Never invent statistics, medical claims, performance numbers, OSHA certifications, awards, review counts, or research findings. Only make claims supported by supplied data or generally accepted workplace best practices.
 6. Topic Consistency: Every sentence must support the '{topic}'. Never mention products outside the current article category.
 7. Writing Style & SEO: Professional, editorial, helpful, conversational, human, and trustworthy. Avoid AI-sounding phrases, keyword stuffing, marketing hype, generic filler (like "In today's fast-paced world"), and repetitive wording. Naturally include the primary keyword '{keyword}', but write for humans first.
-8. Validation: Before returning the introduction verify: 1) No fake personal experience is claimed, 2) No hallucinated claims exist, 3) No unrelated products are mentioned, 4) The content is US-focused, 5) Topic consistency is 100%, 6) The text is Helpful Content compliant. If validation fails, regenerate until it passes.
+8. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the title, headings, or body. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., OSHA guidance updated in 2024, product released in 2025).
+9. Validation: Before returning the introduction verify: 1) No fake personal experience is claimed, 2) No hallucinated claims exist, 3) No unrelated products are mentioned, 4) The content is US-focused, 5) Topic consistency is 100%, 6) The text is Helpful Content compliant, 7) No marketing-style years are present. If validation fails, regenerate until it passes.
 """
 
 
@@ -152,6 +173,7 @@ Instructions:
 5. Tone & Trust: Write like a senior US editorial reviewer using neutral wording (e.g., "Based on available specifications," "For most US remote workers," "When comparing similar products"). NEVER fabricate personal experience (e.g., do NOT use "In my week of testing," "I tested," "I found," "After using," or "I personally recommend"). Do NOT invent facts, ratings, review counts, battery life, dimensions, compatibility, performance, certifications, OSHA approval, or medical claims.
 6. Context Rules: Discuss ONLY the supplied product. Do not mention products from previous articles, placeholder products, or deviate from the article topic.
 7. Ergonomics: If evaluating an ergonomic product (mouse, keyboard, chair, desk, monitor arm, lighting, standing desk, footrest, workstation accessories), incorporate OSHA-aligned ergonomic best practices (e.g., neutral wrist position, reduced repetitive strain, comfortable long-session use, proper hand positioning, avoid excessive wrist extension) where naturally appropriate. Do NOT claim OSHA certification.
+8. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the review. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
 """
 
 COMPARISON_TEMPLATE = """
@@ -167,7 +189,8 @@ Instructions:
 6. Price Handling: If current pricing is available from the supplied data, display it. If pricing is unavailable, display "Check Current Price". NEVER invent prices.
 7. HTML Requirements: Use <table class="comparison-table"> with a proper <thead> block containing product names in <th> elements, and a <tbody> block containing the attribute rows in <tr><td> elements. The first <th> in <thead> and the first <td> in each row must be the attribute label. The last <tbody> row must be the 'Verdict' row. Each Verdict cell must contain a button-styled link: <a href="link" class="btn">Check Current Price</a>. Do NOT use <th> inside <tbody>. Do NOT change CSS classes, button styling, or layout.
 8. US Focus & Readability: Write for US buyers in American English, highlighting differences important to remote workers, home office users, freelancers, and knowledge workers. Keep rows concise, avoid unnecessary technical jargon, and highlight practical buying differences.
-9. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%, 7) Table uses <thead> and <tbody> correctly. If validation fails, automatically regenerate until it succeeds.
+9. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the comparison table. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
+10. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%, 7) Table uses <thead> and <tbody> correctly, 8) No marketing-style years present. If validation fails, automatically regenerate until it succeeds.
 """
 
 FAQ_TEMPLATE = """
@@ -184,7 +207,8 @@ Instructions:
 5. Ergonomic Guidance: When the article is about ergonomic products, include OSHA-aligned ergonomic guidance where appropriate (e.g., neutral wrist position, proper desk height, monitor positioning, comfortable long-session usage). Avoid medical claims and NEVER imply OSHA approval.
 6. Readability & SEO: Answer directly. Keep each answer concise (approximately 70-120 words). Avoid filler and do not repeat content already explained in the article. Naturally include important related keywords without keyword stuffing. Generate questions users genuinely search for.
 7. JSON-LD: Continue generating Schema.org FAQPage JSON-LD. Do not modify schema structure.
-8. Validation: Before returning the FAQ verify: 1) Exactly three questions exist, 2) Every question belongs to the article topic, 3) No unrelated products are mentioned, 4) No hallucinated facts or fake compatibility claims, 5) US focused, 6) EEAT compliant. If validation fails, automatically regenerate until it succeeds.
+8. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in questions or answers. Write evergreen content. Only mention a year if it is an objective factual requirement.
+9. Validation: Before returning the FAQ verify: 1) Exactly three questions exist, 2) Every question belongs to the article topic, 3) No unrelated products are mentioned, 4) No hallucinated facts or fake compatibility claims, 5) US focused, 6) EEAT compliant, 7) No marketing-style years present. If validation fails, automatically regenerate until it succeeds.
 """
 
 QUICK_SUMMARY_TEMPLATE = """
@@ -200,7 +224,8 @@ Instructions:
 4. Category Consistency: Every recommendation must belong to the article topic ({topic}). 
 5. Trust Rules: Never invent ratings, awards, performance, specifications, certifications, battery life, or compatibility. If information is unavailable, do not invent it. Never fabricate reasons.
 6. Writing Style: Professional, US editorial tone, concise, helpful. No marketing hype. No filler.
-7. Validation: Before returning the section verify: 1) Every recommended product exists in the supplied data, 2) Every recommendation belongs to the article topic, 3) No placeholder products exist, 4) No unrelated category exists, 5) No hallucinated product names exist.
+7. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the summary. Write evergreen content. Only mention a year if it is an objective factual requirement.
+8. Validation: Before returning the section verify: 1) Every recommended product exists in the supplied data, 2) Every recommendation belongs to the article topic, 3) No placeholder products exist, 4) No unrelated category exists, 5) No hallucinated product names exist, 6) No marketing-style years present.
 """
 
 CONCLUSION_TEMPLATE = """
@@ -218,13 +243,15 @@ Instructions:
 6. Trust Rules: Never invent ratings, review counts, prices, specifications, certifications, performance, or medical claims. Only discuss verified information.
 7. Writing Style: Professional, balanced, helpful, confident, and human. No hype, no fluff, no AI repetition.
 8. Ending: Finish with a short, encouraging closing focused on choosing the product that best fits the reader's workflow and budget. Do NOT use generic motivational phrases.
-9. Validation: Before returning the conclusion verify: 1) Every product mentioned exists in the supplied data for this article, 2) No unrelated or placeholder products exist, 3) No hallucinated recommendations exist, 4) Topic consistency is 100%. If validation fails, regenerate until it passes.
+9. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the conclusion. Write evergreen content. Only mention a year if it is an objective factual requirement.
+10. Validation: Before returning the conclusion verify: 1) Every product mentioned exists in the supplied data for this article, 2) No unrelated or placeholder products exist, 3) No hallucinated recommendations exist, 4) Topic consistency is 100%, 5) No marketing-style years present. If validation fails, regenerate until it passes.
 """
 
 SEO_TAGS_TEMPLATE = """
 Generate a comma-separated list of 5-8 evergreen SEO tags for '{topic}'.
 CRITICAL: Do NOT include dates or years. 
 Focus on user intent and specific product category terms.
+Evergreen Requirement: Tags must not contain calendar years (2024, 2025, etc.). Only include year if it is an objective factual requirement (e.g., "Windows 11 24H2").
 Return ONLY the tags.
 """
 
@@ -330,6 +357,9 @@ Suggested OSHA References
 
 Suggested Schema Type
 (Name the most appropriate schema.org type for this article)
+
+Evergreen Requirement:
+All titles, headings, and metadata must be evergreen. Do NOT include calendar years (2024, 2025, etc.) unless the year is an objective factual requirement (e.g., OSHA updated guidance in 2024, product released in 2025, Windows 11 24H2). No marketing-style years.
 """
 
 INFORMATIONAL_ARTICLE_TEMPLATE = """
@@ -348,6 +378,9 @@ Requirements:
 3. Style and Tone: Professional, editorial, authoritative, helpful, and natural (Wirecutter/New York Times style). Avoid robotic transitions, repetitive sentence structures, and generic AI filler. Do not include any AI disclaimers or introductory meta-commentary.
 4. Content Quality: Focus on E-E-A-T and helpful content principles. Avoid fake statistics, fictional experts, fabricated case studies, or emojis. Use OSHA guidance accurately and only when relevant.
 5. Exclusions: Do NOT generate a Conclusion section, FAQ section, Related Articles, Images, Image placeholders, Affiliate buttons, Product sections, Call To Action, Schema, Internal links, External links, or Author box.
+
+Evergreen Requirement:
+All content must be evergreen. Do NOT include calendar years (2024, 2025, etc.) in titles, headings, metadata, body content, or anywhere unless the year is an objective factual requirement (e.g., OSHA updated guidance in 2024, product released in 2025, Windows 11 24H2). No marketing-style years.
 
 Formatting Requirements:
 1. Format the article using clean, semantic HTML5 tags ONLY.
@@ -391,6 +424,8 @@ Prompt: [Write one extremely detailed, descriptive image generation prompt. It m
 Alt Text: [Write descriptive, SEO-friendly alternative text]
 Caption: [Write a clear, editorial caption explaining what is depicted]
 --------------------
+
+Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in prompts, alt text, or captions. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
 """
 
 
@@ -447,6 +482,7 @@ Requirements:
    the article structure without disrupting flow.
 4. Return as JSON array of objects with: "heading", "target_phrase", "intent", "suggested_placement"
 5. Do NOT include generic "best X" or "top X" headings - those are already covered.
+6. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in headings or target phrases unless the year is an objective factual requirement (e.g., Windows 11 24H2, product released in 2025, OSHA guidance updated in 2024). No marketing-style years.
 
 Example output format:
 [

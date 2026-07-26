@@ -2,6 +2,8 @@ name: Autonomous Information Publisher
 
 on:
   workflow_dispatch: # Allows manual trigger from GitHub UI
+  schedule:
+    - cron: '0 13 * * *'  # Daily at 13:00 UTC (adjust as needed)
 
 jobs:
   publish:
@@ -19,9 +21,9 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Publisher Pipeline
+      - name: Run Informational Publisher Pipeline
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
           AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -33,4 +35,4 @@ jobs:
           SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
-        run: python main.py
+        run: python main_informational.py
