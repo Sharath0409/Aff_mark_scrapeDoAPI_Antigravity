@@ -49,6 +49,33 @@ class ContentGenerator:
         self.section_variator = SectionVariator()
         self.cannibalization_checker = CannibalizationChecker()
 
+    @get_retry_decorator()
+    def generate_section(self, prompt: str, model: str = "deepseek-v4-flash") -> str:
+        """Call Deepseek API to generate a content section."""
+        if not self.client:
+            logger.error("Deepseek client not initialized - API key missing")
+            return "<p>Content generation skipped because no Deepseek API key is configured.</p>"
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+            )
+            content = response.choices[0].message.content
+            
+            # Deepseek sometimes wraps HTML in markdown blocks, let's clean it
+            if content.startswith("```html"):
+                content = content.replace("```html", "").replace("```", "")
+            
+            return sanitize_html(content)
+        except Exception as e:
+            logger.error(f"Error calling Deepseek API: {e}")
+            raise
+
     def _apply_quality_corrections(self, html, topic, keyword):
         """Clean generated HTML so it stays topic-focused, US-focused, and EEAT-safe."""
         if not html:
