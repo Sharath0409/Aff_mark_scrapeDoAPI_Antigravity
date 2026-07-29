@@ -7,12 +7,15 @@ from templates.prompts import (
     COMPARISON_TEMPLATE, FAQ_TEMPLATE, SEO_TAGS_TEMPLATE,
     QUICK_SUMMARY_TEMPLATE, CONCLUSION_TEMPLATE,
     REVIEWS_HEADER_TEMPLATE, INFORMATIONAL_BLUEPRINT_TEMPLATE,
-    INFORMATIONAL_ARTICLE_TEMPLATE, INFORMATIONAL_IMAGE_PLAN_TEMPLATE,
+    INFORMATIONAL_ARTICLE_TEMPLATE, INFORMATIONAL_IMAGE_PROMPT_PLAN_TEMPLATE,
     LONG_TAIL_HEADING_VARIANTS_PROMPT
 )
 from utils.text_cleaner import sanitize_html
 import re
 import json
+import time
+import tempfile
+import math
 from bs4 import BeautifulSoup
 from utils.image_optimizer import ImageOptimizer
 from utils.image_uploader import BloggerCDNUploader
@@ -22,6 +25,22 @@ from core.schema_generator import SchemaGenerator, generate_product_schemas
 from core.cannibalization_checker import CannibalizationChecker
 
 logger = get_logger(__name__)
+
+# Banned negation words (case-insensitive check)
+NEGATION_WORDS = [
+    "free", "without", "no", "not", "clutter-free", "clutter free",
+    "devoid of", "lacking", "absent", "exclude", "excluding",
+    "never", "none", "nothing", "nowhere", "neither", "nor"
+]
+
+STYLE_SUFFIX = ", clean flat-style technical illustration, labeled, high clarity, white background"
+MAX_PROMPT_WORDS = 150
+
+# CLIP Configuration for image-text relevance verification
+# PLACEHOLDER THRESHOLD - REQUIRES CALIBRATION AGAINST REAL OUTPUT BEFORE PRODUCTION USE
+CLIP_MODEL_NAME = getattr(settings, "CLIP_MODEL_NAME", "openai/clip-vit-base-patch32")
+CLIP_SIMILARITY_THRESHOLD = getattr(settings, "CLIP_SIMILARITY_THRESHOLD", 0.25)
+CLIP_MAX_RETRIES = 1  # One retry on low score
 
 class ContentGenerator:
     def __init__(self):
@@ -151,124 +170,362 @@ class ContentGenerator:
 
         return str(soup).strip()
 
-    def _remove_marketing_years(self, soup: BeautifulSoup, topic: str):
-        """Remove marketing-style years from content while preserving factual years.
-        
-        Factual years to PRESERVE:
-        - OSHA guidance updates (e.g., "OSHA updated guidance in 2024")
-        - Product release years (e.g., "released in 2025")
-        - Version numbers (e.g., "Windows 11 24H2", "23H2")
-        
-        Marketing years to REMOVE:
-        - "Best of 2024", "2025 Guide", "for 2024", "in 2025"
-        - "Updated for 2024", "2024 Review", "Top Picks 2025"
-        - Any year used for marketing freshness rather than factual accuracy
+    def validate_image_prompt(self, prompt: str, marker_id: str) -> tuple[str, bool]:
         """
-        import re
+        Check prompt for negation words and token budget.
+        Returns: (sanitized_prompt, was_corrected)
+        """
+        was_corrected = False
+        sanitized = prompt
         
-        # Pattern to match years 2020-2099
-        year_pattern = re.compile(r'\b(20\d{2})\b')
+        # 1. Negation word check - remove the negation word and any attached punctuation/dash
+        lower = sanitized.lower()
+        for neg in NEGATION_WORDS:
+            if neg in lower:
+                # Find and remove the specific negation word with word boundaries
+                # Also handle compound words like "clutter-free" -> remove "free" part
+                pattern = re.compile(r'\b' + re.escape(neg) + r'(?:-\w+)?\b', re.IGNORECASE)
+                if pattern.search(sanitized):
+                    sanitized = pattern.sub('', sanitized)
+                    was_corrected = True
+                    logger.warning(f"[{marker_id}] Negation word '{neg}' detected. Sanitized: '{prompt}' -> '{sanitized}'")
         
-        # Factual year context patterns that should be preserved
-        factual_contexts = [
-            r'OSHA.*?(?:updated|guidance|standard).*?\b20\d{2}\b',
-            r'\b20\d{2}\b.*?OSHA.*?(?:updated|guidance|standard)',
-            r'(?:released|launched|introduced|announced).*?\b20\d{2}\b',
-            r'\b20\d{2}\b.*?(?:released|launched|introduced|announced)',
-            r'Windows\s+\d+\s+\d{2}H\d',  # Windows 11 24H2
-            r'version\s+\d{2}H\d',  # version 24H2
-            r'\b20\d{2}\s*(?:version|release|model)',  # 2024 version
-            r'(?:firmware|driver|software)\s+\d{4}',  # firmware 2024
-        ]
+        # Clean up any double spaces or orphaned punctuation from removal
+        sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+        sanitized = re.sub(r'\s+([.,!?])', r'\1', sanitized)  # fix spacing before punctuation
+        sanitized = re.sub(r'-\s*', '-', sanitized)  # fix trailing dashes
+        sanitized = re.sub(r'\s+-', '', sanitized)  # remove leading dashes
         
-        for text_node in soup.find_all(string=True):
-            if text_node.parent and text_node.parent.name in {"script", "style"}:
-                continue
-            
-            original = str(text_node)
-            updated = original
-            
-            # Check if this text contains any factual year contexts
-            has_factual_context = False
-            for pattern in factual_contexts:
-                if re.search(pattern, original, re.IGNORECASE):
-                    has_factual_context = True
+        # If sanitization left us with nothing or very little, use a fallback
+        if len(sanitized.split()) < 10:
+            logger.warning(f"[{marker_id}] Prompt too short after sanitization ({len(sanitized.split())} words), using fallback")
+            sanitized = "Professional workspace setup with relevant equipment, organized layout, natural lighting"
+            was_corrected = True
+        
+        # 2. Word budget (rough token estimate)
+        word_count = len(sanitized.split())
+        if word_count > MAX_PROMPT_WORDS:
+            # Truncate to last complete sentence within budget
+            sentences = re.split(r'(?<=[.!?])\s+', sanitized)
+            truncated = []
+            count = 0
+            for s in sentences:
+                if count + len(s.split()) > MAX_PROMPT_WORDS:
                     break
-            
-            if not has_factual_context:
-                # Remove marketing-style years
-                # Pattern: "Best of 2024", "2025 Guide", "for 2024", "in 2025", "Updated for 2024", "2024 Review", "Top Picks 2025"
-                marketing_year_patterns = [
-                    r'\b(?:Best|Top|Updated|Review|Guide|Picks?)\s+(?:of\s+|for\s+|in\s+)?(20\d{2})\b',
-                    r'\b(20\d{2})\s+(?:Guide|Review|Update|Edition|Version)\b',
-                    r'\b(?:for|in)\s+(20\d{2})\b',  # "for 2024", "in 2025"
-                    r'\b(?:Updated|Refreshed)\s+(?:for|in)\s+(20\d{2})\b',
-                    r'\b(20\d{2})\s*(?:Edition|Update)\b',
-                ]
-                
-                for pattern in marketing_year_patterns:
-                    updated = re.sub(pattern, '', updated, flags=re.IGNORECASE)
-                
-                # Clean up any double spaces left by removals
-                updated = re.sub(r'\s+', ' ', updated).strip()
-            
-            if updated != original:
-                text_node.replace_with(updated)
+                truncated.append(s)
+                count += len(s.split())
+            if truncated:
+                sanitized = " ".join(truncated)
+                was_corrected = True
+                logger.warning(f"[{marker_id}] Prompt exceeded {MAX_PROMPT_WORDS} words. Truncated: '{prompt}' -> '{sanitized}'")
         
+        return sanitized.strip(), was_corrected
+
+
     @get_retry_decorator()
-    def generate_section(self, prompt, model="deepseek-v4-flash"):
-        """Call Deepseek API to generate content."""
-        logger.info(f"Generating content with model {model}")
-        if not self.client:
-            return "<p>Content generation skipped because no Deepseek API key is configured.</p>"
-        if model in {"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4o-mini"}:
-            model = "deepseek-v4-flash"
+    def get_clip_embeddings(self, image_bytes: bytes = None, text: str = None) -> list:
+        """
+        Get CLIP embeddings from Hugging Face Inference API.
+        Provide either image_bytes OR text (not both).
+        Returns embedding vector as list of floats.
+        """
+        import requests
+        url = f"https://router.huggingface.co/hf-inference/models/{CLIP_MODEL_NAME}"
+        headers = {"Authorization": f"Bearer {settings.HF_API_TOKEN}"}
+        
+        if image_bytes is not None:
+            payload = {"inputs": {"image": image_bytes}}
+        elif text is not None:
+            payload = {"inputs": {"text": text}}
+        else:
+            raise ValueError("Must provide either image_bytes or text")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        
+        if response.status_code == 503:
+            # Cold start - check for estimated_time
+            try:
+                data = response.json()
+                wait_time = data.get("estimated_time", 20)
+                logger.info(f"CLIP model loading, waiting {wait_time}s")
+                time.sleep(wait_time)
+                raise Exception("Model loading - retry")
+            except:
+                time.sleep(20)
+                raise Exception("Model loading - retry")
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        # HF CLIP API returns {"image_embeds": [...]} or {"text_embeds": [...]}
+        if isinstance(result, dict):
+            if "image_embeds" in result:
+                return result["image_embeds"][0] if result["image_embeds"] else []
+            if "text_embeds" in result:
+                return result["text_embeds"][0] if result["text_embeds"] else []
+        # Fallback: assume direct list
+        return result[0] if result and isinstance(result[0], list) else result
+
+
+    def cosine_similarity(self, vec1: list, vec2: list) -> float:
+        """Compute cosine similarity between two vectors."""
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
+            return 0.0
+        dot = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        return dot / (norm1 * norm2)
+
+
+    def verify_image_relevance(self, image_bytes: bytes, prompt_text: str, section_text: str, marker_id: str) -> tuple[float, float, bool]:
+        """
+        CALL 4: Verify image relevance using CLIP embeddings.
+        
+        Computes:
+        1. prompt_similarity: cosine similarity between image and prompt_text embeddings
+        2. section_similarity: cosine similarity between image and section_text embeddings
+        
+        Returns: (prompt_similarity, section_similarity, passed)
+        """
         try:
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
+            # Get embeddings
+            image_emb = self.get_clip_embeddings(image_bytes=image_bytes)
+            prompt_emb = self.get_clip_embeddings(text=prompt_text)
+            section_emb = self.get_clip_embeddings(text=section_text)
+            
+            if not image_emb or not prompt_emb or not section_emb:
+                logger.warning(f"[{marker_id}] Failed to get CLIP embeddings")
+                return 0.0, 0.0, False
+            
+            # Compute similarities
+            prompt_sim = self.cosine_similarity(image_emb, prompt_emb)
+            section_sim = self.cosine_similarity(image_emb, section_emb)
+            
+            passed = prompt_sim >= CLIP_SIMILARITY_THRESHOLD and section_sim >= CLIP_SIMILARITY_THRESHOLD
+            
+            # Log both scores for calibration (mandatory)
+            logger.info(
+                f"[{marker_id}] CLIP scores: prompt_sim={prompt_sim:.4f}, "
+                f"section_sim={section_sim:.4f}, threshold={CLIP_SIMILARITY_THRESHOLD}, "
+                f"passed={passed}"
             )
-            content = response.choices[0].message.content
             
-            # Deepseek sometimes wraps HTML in markdown blocks, let's clean it
-            if content.startswith("```html"):
-                content = content.replace("```html", "").replace("```", "")
+            return prompt_sim, section_sim, passed
             
-            return sanitize_html(content)
         except Exception as e:
-            logger.error(f"Error calling Deepseek API: {e}")
-            raise
-            
-    def generate_seo_tags(self, topic, keyword):
-        """Generate SEO labels for Blogger."""
-        logger.info("Generating SEO optimized labels...")
-        prompt = SEO_TAGS_TEMPLATE.format(topic=topic, keyword=keyword)
-        result = self.generate_section(prompt, model="deepseek-v4-flash")
-        # Strip HTML tags just in case
-        result = result.replace('<p>', '').replace('</p>', '').replace('\n', '').strip()
-        tags = [tag.strip() for tag in result.replace('"', '').split(',') if tag.strip()]
+            logger.error(f"[{marker_id}] CLIP verification failed: {e}")
+            return 0.0, 0.0, False
+
+
+    def extract_section_around_marker(self, article_html: str, marker_id: str) -> str:
+        """
+        Extract the text content (paragraphs) surrounding the [IMG-N] marker
+        to use as section context for CLIP verification.
+        """
+        soup = BeautifulSoup(article_html, 'html.parser')
+        full_text = soup.get_text()
         
-        # Sanitize tags and enforce Blogger's strict 200 character limit for ALL labels combined
-        safe_tags = []
-        total_length = 0
-        for tag in tags:
-            # Only allow alphanumeric, spaces, and hyphens
-            safe_tag = re.sub(r'[^a-zA-Z0-9\s\-]', '', tag).strip()
-            # Safety fallback: Strip any 4-digit years (e.g. 2023, 2024)
-            safe_tag = re.sub(r'\b\d{4}\b', '', safe_tag).strip()
+        # Find marker position
+        marker_pattern = f"[{marker_id}]"
+        marker_pos = full_text.find(marker_pattern)
+        if marker_pos == -1:
+            return ""
+        
+        # Extract surrounding text (500 chars before and after)
+        start = max(0, marker_pos - 500)
+        end = min(len(full_text), marker_pos + 500)
+        section_text = full_text[start:end].strip()
+        
+        # Clean up
+        section_text = re.sub(r'\s+', ' ', section_text)
+        return section_text
+
+    @get_retry_decorator()
+    def generate_image_via_hf(self, prompt: str) -> bytes:
+        """Call HF Inference API for FLUX.1-schnell. Returns image bytes."""
+        import requests
+        url = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
+        headers = {"Authorization": f"Bearer {settings.HF_API_TOKEN}"}
+        payload = {
+            "inputs": prompt,
+            "parameters": {"guidance_scale": 0.0, "num_inference_steps": 4}
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        
+        if response.status_code == 503:
+            # Cold start - check for estimated_time
+            try:
+                data = response.json()
+                wait_time = data.get("estimated_time", 20)
+                logger.info(f"HF model loading, waiting {wait_time}s")
+                time.sleep(wait_time)
+                raise Exception("Model loading - retry")  # triggers tenacity retry
+            except:
+                time.sleep(20)
+                raise Exception("Model loading - retry")
+        
+        response.raise_for_status()
+        return response.content  # image bytes
+
+
+    def generate_image_prompt_plan(self, article_html: str, topic: str, keyword: str, category: str) -> str:
+        """CALL 2: Generate prompt plan from full article with markers. Returns JSON string."""
+        logger.info(f"Generating image prompt plan for: {topic}")
+        prompt = INFORMATIONAL_IMAGE_PROMPT_PLAN_TEMPLATE.format(
+            article_html=article_html,
+            topic=topic,
+            keyword=keyword,
+            category=category
+        )
+        return self.generate_section(prompt, model="deepseek-v4-flash")
+
+
+    def generate_images_and_update_post(self, article_html: str, post_id: str, topic: str, 
+                                         keyword: str, category: str, publisher) -> tuple[str, list]:
+        """
+        CALL 3 + CALL 4: Generate images via HF, verify with CLIP, upload to GCS with post_id path, update Blogger post.
+        Returns final HTML with markers replaced by <img> tags and manifest list.
+        """
+        # Step 1: Generate prompt plan (Call 2)
+        prompt_plan_json = self.generate_image_prompt_plan(article_html, topic, keyword, category)
+        try:
+            prompt_plan = json.loads(prompt_plan_json)  # {"IMG-1": "prompt", ...}
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse image prompt plan JSON: {e}")
+            logger.error(f"Raw response: {prompt_plan_json}")
+            return article_html, []
+        
+        # Step 2: Validate each prompt
+        validated_plan = {}
+        for marker_id, prompt in prompt_plan.items():
+            sanitized, corrected = self.validate_image_prompt(prompt, marker_id)
+            final_prompt = sanitized + STYLE_SUFFIX
+            validated_plan[marker_id] = final_prompt
+        
+        # Step 3: Generate images (Call 3) + Verify (Call 4) - sequential
+        final_html = article_html
+        uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
+        optimizer = ImageOptimizer()
+        manifest = []
+        
+        for marker_id, final_prompt in validated_plan.items():
+            # Extract the validated prompt without style suffix for CLIP verification
+            validated_prompt_no_suffix = final_prompt.replace(STYLE_SUFFIX, "")
             
-            if safe_tag and safe_tag not in safe_tags:
-                if total_length + len(safe_tag) + 1 < 180: # Keep a safe buffer
-                    safe_tags.append(safe_tag)
-                    total_length += len(safe_tag) + 1
+            # Get section text around marker for CLIP section similarity check
+            section_text = self.extract_section_around_marker(article_html, marker_id)
+            
+            # Track retry state
+            image_accepted = False
+            image_bytes = None
+            prompt_sim = 0.0
+            section_sim = 0.0
+            retry_attempted = False
+            
+            # Allow up to 1 retry on low CLIP score
+            for attempt in range(CLIP_MAX_RETRIES + 1):
+                try:
+                    # Generate image (Call 3)
+                    image_bytes = self.generate_image_via_hf(final_prompt)
+                    
+                    # CALL 4: CLIP Verification
+                    prompt_sim, section_sim, passed = self.verify_image_relevance(
+                        image_bytes=image_bytes,
+                        prompt_text=validated_prompt_no_suffix,
+                        section_text=section_text,
+                        marker_id=marker_id
+                    )
+                    prompt_sim = prompt_sim
+                    section_sim = section_sim
+                    
+                    if passed:
+                        image_accepted = True
+                        break  # Accept image, exit retry loop
+                    else:
+                        # Log low score
+                        logger.warning(
+                            f"[{marker_id}] CLIP verification failed (attempt {attempt + 1}): "
+                            f"prompt_sim={prompt_sim:.4f}, section_sim={section_sim:.4f}, "
+                            f"threshold={CLIP_SIMILARITY_THRESHOLD}"
+                        )
+                        if attempt < CLIP_MAX_RETRIES:
+                            retry_attempted = True
+                            logger.info(f"[{marker_id}] Retrying image generation...")
+                            continue  # Retry with same prompt
+                        else:
+                            # Max retries exhausted
+                            break
+                            
+                except Exception as e:
+                    logger.error(f"[{marker_id}] Error during generation/verification (attempt {attempt + 1}): {e}")
+                    if attempt < CLIP_MAX_RETRIES:
+                        retry_attempted = True
+                        continue
+                    else:
+                        break
+            
+            # Process accepted image or handle rejection
+            if image_accepted and image_bytes is not None:
+                try:
+                    # Save to temp file, optimize to WebP
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                        tmp.write(image_bytes)
+                        tmp_path = tmp.name
+                    
+                    webp_path, w, h = optimizer.process_from_path(tmp_path, topic)
+                    
+                    # Upload to GCS with post_id path
+                    gcs_path = f"{post_id}/{marker_id}.webp"
+                    cdn_url = uploader.upload_to_google_cdn(webp_path, bucket_name=settings.GCS_BUCKET_NAME, blob_name=gcs_path)
+                    
+                    if cdn_url:
+                        # Replace marker with <img> tag
+                        img_tag = f'<figure style="margin: 40px 0; text-align: center;"><img src="{cdn_url}" alt="{topic} - {marker_id}" width="{w}" height="{h}" loading="lazy" decoding="async" style="max-width: 100%; height: auto; border-radius: 8px;"><figcaption style="margin-top: 12px; font-size: 0.9em; color: #666; font-style: italic;">{marker_id} illustration</figcaption></figure>'
+                        final_html = final_html.replace(f"[{marker_id}]", img_tag)
+                        logger.info(f"Generated and inserted {marker_id} for post {post_id}")
+                        
+                        manifest.append({
+                            "marker_id": marker_id,
+                            "prompt": final_prompt,
+                            "cdn_url": cdn_url,
+                            "width": w,
+                            "height": h,
+                            "clip_prompt_similarity": round(prompt_sim, 4),
+                            "clip_section_similarity": round(section_sim, 4),
+                            "clip_retry": retry_attempted
+                        })
+                    else:
+                        logger.error(f"GCS upload failed for {marker_id}")
+                        final_html = final_html.replace(f"[{marker_id}]", f"<!-- Image {marker_id} failed -->")
+                        
+                except Exception as e:
+                    logger.error(f"Image processing failed for {marker_id}: {e}")
+                    final_html = final_html.replace(f"[{marker_id}]", f"<!-- Image {marker_id} failed: {str(e)[:100]} -->")
+            else:
+                # Image rejected after retries - skip but log as flagged-low-relevance
+                logger.warning(
+                    f"[{marker_id}] FLAGGED-LOW-RELEVANCE: prompt_sim={prompt_sim:.4f}, "
+                    f"section_sim={section_sim:.4f}, threshold={CLIP_SIMILARITY_THRESHOLD}, "
+                    f"retry={retry_attempted}, prompt='{validated_prompt_no_suffix[:100]}...'"
+                )
+                final_html = final_html.replace(f"[{marker_id}]", f"<!-- Image {marker_id} skipped: low CLIP relevance (prompt={prompt_sim:.2f}, section={section_sim:.2f}) -->")
                 
-        return safe_tags
+                manifest.append({
+                    "marker_id": marker_id,
+                    "prompt": final_prompt,
+                    "cdn_url": None,
+                    "width": 0,
+                    "height": 0,
+                    "clip_prompt_similarity": round(prompt_sim, 4),
+                    "clip_section_similarity": round(section_sim, 4),
+                    "clip_retry": retry_attempted,
+                    "flagged_low_relevance": True
+                })
         
-    def generate_full_post(self, topic, keyword, products):
+        optimizer.cleanup()
+        return final_html, manifest
         """Assemble the complete blog post with visual styling and all requested sections."""
         logger.info("Starting full post generation")
         
@@ -493,205 +750,3 @@ class ContentGenerator:
         elif article_html.startswith("```"):
             article_html = article_html.split("```")[1].split("```")[0].strip()
         return sanitize_html(article_html)
-
-    def generate_image_plan(self, blueprint: str, article: str, topic: str, keyword: str, category: str) -> str:
-        """Generate a structured image plan for the informational article."""
-        logger.info(f"Generating image plan for: {topic}")
-        prompt = INFORMATIONAL_IMAGE_PLAN_TEMPLATE.format(
-            topic=topic,
-            keyword=keyword,
-            category=category,
-            blueprint=blueprint,
-            article=article
-        )
-        return self.generate_section(prompt, model="deepseek-v4-flash")
-
-    def generate_article_images(self, image_plan: str, topic: str) -> list:
-        """Parse image plan and generate/optimize/upload images, returning manifest."""
-        logger.info(f"Generating article images for: {topic}")
-        
-        # Parse image plan to extract image details
-        images = self._parse_image_plan(image_plan)
-        if not images:
-            logger.warning("No images found in image plan")
-            return []
-        
-        optimizer = ImageOptimizer()
-        uploader = BloggerCDNUploader(settings.GCP_SERVICE_ACCOUNT)
-        manifest = []
-        
-        try:
-            for img in images:
-                img_num = img.get("image_number", len(manifest) + 1)
-                purpose = img.get("purpose", "")
-                placement = img.get("placement", "")
-                reference_heading = img.get("reference_heading", "")
-                style = img.get("style", "Realistic Workspace")
-                aspect_ratio = img.get("aspect_ratio", "16:9")
-                prompt = img.get("prompt", "")
-                alt_text = img.get("alt_text", "")
-                caption = img.get("caption", "")
-                
-                logger.info(f"Generating image {img_num}: {purpose}")
-                
-                # Generate image via Deepseek (using DALL-E or similar through API)
-                # For now, we'll use a placeholder approach - the actual image generation
-                # would be done via an image generation API
-                generated_image_url = self._generate_image_via_api(prompt, style, aspect_ratio)
-                
-                if generated_image_url:
-                    # Download, optimize, and upload to GCS
-                    temp_webp, img_w, img_h = optimizer.process_from_url(generated_image_url, f"{topic}-img{img_num}")
-                    if temp_webp:
-                        cdn_url = uploader.upload_to_google_cdn(temp_webp, bucket_name=settings.GCS_BUCKET_NAME)
-                        if cdn_url:
-                            manifest.append({
-                                "image_number": img_num,
-                                "purpose": purpose,
-                                "placement": placement,
-                                "reference_heading": reference_heading,
-                                "style": style,
-                                "aspect_ratio": aspect_ratio,
-                                "prompt": prompt,
-                                "alt_text": alt_text,
-                                "caption": caption,
-                                "cdn_url": cdn_url,
-                                "width": img_w,
-                                "height": img_h
-                            })
-                            logger.info(f"Image {img_num} uploaded to CDN: {cdn_url}")
-                        else:
-                            logger.error(f"Failed to upload image {img_num} to GCS")
-                    else:
-                        logger.error(f"Failed to optimize image {img_num}")
-                else:
-                    logger.error(f"Failed to generate image {img_num}")
-            
-            return manifest
-        finally:
-            optimizer.cleanup()
-
-    def _parse_image_plan(self, image_plan: str) -> list:
-        """Parse the text-based image plan into structured data."""
-        images = []
-        current_image = {}
-        
-        for line in image_plan.split('\n'):
-            line = line.strip()
-            if not line:
-                continue
-            
-            if line.startswith("Image Number:"):
-                if current_image:
-                    images.append(current_image)
-                current_image = {"image_number": line.split(":", 1)[1].strip()}
-            elif line.startswith("Purpose:"):
-                current_image["purpose"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Placement:"):
-                current_image["placement"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Reference Heading:"):
-                current_image["reference_heading"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Image Style:"):
-                current_image["style"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Aspect Ratio:"):
-                current_image["aspect_ratio"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Prompt:"):
-                current_image["prompt"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Alt Text:"):
-                current_image["alt_text"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Caption:"):
-                current_image["caption"] = line.split(":", 1)[1].strip()
-            elif line.startswith("---"):
-                continue
-        
-        if current_image:
-            images.append(current_image)
-        
-        return images
-
-    def _generate_image_via_api(self, prompt: str, style: str, aspect_ratio: str) -> str:
-        """Generate an image via the Deepseek API (or configured image generation service)."""
-        # Use the existing Deepseek client to call an image generation endpoint
-        # This is a placeholder - actual implementation depends on available API
-        try:
-            # Build a detailed prompt for the image generation model
-            enhanced_prompt = f"{prompt}, {style.lower()}, aspect ratio {aspect_ratio}, professional editorial photography, high quality, no text, no watermarks, no logos, no brand names"
-            
-            # Call the image generation API through Deepseek
-            response = self.client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=[
-                    {"role": "system", "content": "You are an image generation prompt enhancer. Return only a JSON object with a single 'image_url' field containing a placeholder or generated image URL."},
-                    {"role": "user", "content": f"Generate an image URL for: {enhanced_prompt}"}
-                ],
-                temperature=0.7,
-                response_format={"type": "json_object"}
-            )
-            
-            result = json.loads(response.choices[0].message.content)
-            return result.get("image_url", "")
-        except Exception as e:
-            logger.error(f"Image generation API call failed: {e}")
-            return ""
-
-    def inject_images_into_article(self, article_html: str, image_manifest: list) -> str:
-        """Inject generated images into the article HTML at specified placements."""
-        logger.info("Injecting images into article")
-        soup = BeautifulSoup(article_html, 'html.parser')
-        
-        for img_data in image_manifest:
-            img_num = img_data.get("image_number", 0)
-            placement = img_data.get("placement", "")
-            reference_heading = img_data.get("reference_heading", "")
-            cdn_url = img_data.get("cdn_url", "")
-            alt_text = img_data.get("alt_text", "")
-            caption = img_data.get("caption", "")
-            width = img_data.get("width", "")
-            height = img_data.get("height", "")
-            
-            if not cdn_url:
-                logger.warning(f"Image {img_num} has no CDN URL, skipping")
-                continue
-            
-            # Build image HTML with proper attributes
-            width_attr = f' width="{width}"' if width else ''
-            height_attr = f' height="{height}"' if height else ''
-            
-            figure_html = f"""
-            <figure style="margin: 40px 0; text-align: center;">
-                <img src="{cdn_url}" alt="{alt_text}"{width_attr}{height_attr} loading="lazy" decoding="async" style="max-width: 100%; height: auto; border-radius: 8px;">
-                <figcaption style="margin-top: 12px; font-size: 0.9em; color: #666; font-style: italic;">{caption}</figcaption>
-            </figure>
-            """
-            
-            # Find insertion point based on reference heading
-            inserted = False
-            if reference_heading:
-                for heading in soup.find_all(['h2', 'h3']):
-                    if reference_heading.lower() in heading.get_text().lower():
-                        heading.insert_after(BeautifulSoup(figure_html, 'html.parser'))
-                        inserted = True
-                        logger.info(f"Injected image {img_num} after heading: {reference_heading}")
-                        break
-            
-            # Fallback: try to find by placement description
-            if not inserted and placement:
-                # Try to find relevant section
-                for heading in soup.find_all(['h2', 'h3']):
-                    heading_text = heading.get_text().lower()
-                    if any(keyword in heading_text for keyword in placement.lower().split()):
-                        heading.insert_after(BeautifulSoup(figure_html, 'html.parser'))
-                        inserted = True
-                        logger.info(f"Injected image {img_num} near placement: {placement}")
-                        break
-            
-            # Final fallback: append before footer or at end
-            if not inserted:
-                footer = soup.find('footer')
-                if footer:
-                    footer.insert_before(BeautifulSoup(figure_html, 'html.parser'))
-                else:
-                    soup.append(BeautifulSoup(figure_html, 'html.parser'))
-                logger.info(f"Injected image {img_num} at fallback position")
-        
-        return str(soup)

@@ -22,6 +22,38 @@ class ImageOptimizer:
     def _get_hash(self, url):
         return hashlib.md5(url.encode()).hexdigest()
 
+    def _process_image(self, img, title_keyword):
+        """
+        Internal: Analyze & Enhance -> Resize -> Convert to WebP
+        Returns: (output_path, width, height)
+        """
+        image_hash = hashlib.md5(title_keyword.encode()).hexdigest()
+        safe_name = slugify(title_keyword)[:50]
+        output_filename = f"{safe_name}-{image_hash[:6]}.webp"
+        output_path = self.temp_dir / output_filename
+
+        # 1. Analyze & Enhance
+        img = self.analyze_and_enhance(img)
+
+        # 2. Intelligent Resize (Maintain Aspect Ratio)
+        width, height = img.size
+        if width > self.max_width:
+            ratio = self.max_width / float(width)
+            new_height = int(float(height) * float(ratio))
+            img = img.resize((self.max_width, new_height), Image.Resampling.LANCZOS)
+            width, height = img.size
+            logger.info(f"Resized to {width}px wide.")
+
+        # 3. Convert to WebP & Compress
+        img.save(output_path, "WEBP", quality=85, method=6)
+        
+        # Check size and re-compress if needed
+        if output_path.stat().st_size > self.target_size_kb * 1024:
+            img.save(output_path, "WEBP", quality=70, method=6)
+            
+        logger.info(f"Image optimized locally: {output_path.name} ({output_path.stat().st_size // 1024} KB)")
+        return str(output_path), width, height
+
     def analyze_and_enhance(self, img_pil):
         """
         Analyzes image quality and applies lightweight enhancement if needed.
@@ -55,11 +87,6 @@ class ImageOptimizer:
         Main pipeline: Download -> Enhance -> Optimize -> WebP
         Returns: (str: output_path, int: width, int: height)
         """
-        image_hash = self._get_hash(url)
-        safe_name = slugify(title_keyword)[:50]
-        output_filename = f"{safe_name}-{image_hash[:6]}.webp"
-        output_path = self.temp_dir / output_filename
-
         try:
             # 1. Download
             response = requests.get(url, timeout=15)
@@ -69,30 +96,26 @@ class ImageOptimizer:
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
 
-            # 2. Analyze & Enhance
-            img = self.analyze_and_enhance(img)
-
-            # 3. Intelligent Resize (Maintain Aspect Ratio)
-            width, height = img.size
-            if width > self.max_width:
-                ratio = self.max_width / float(width)
-                new_height = int(float(height) * float(ratio))
-                img = img.resize((self.max_width, new_height), Image.Resampling.LANCZOS)
-                width, height = img.size
-                logger.info(f"Resized to {width}px wide.")
-
-            # 4. Convert to WebP & Compress
-            img.save(output_path, "WEBP", quality=85, method=6)
-            
-            # Check size and re-compress if needed
-            if output_path.stat().st_size > self.target_size_kb * 1024:
-                img.save(output_path, "WEBP", quality=70, method=6)
-                
-            logger.info(f"Image optimized locally: {output_path.name} ({output_path.stat().st_size // 1024} KB)")
-            return str(output_path), width, height
+            return self._process_image(img, title_keyword)
 
         except Exception as e:
             logger.error(f"Failed to process image {url}: {e}")
+            return None, 0, 0
+
+    def process_from_path(self, file_path, title_keyword):
+        """
+        Process a local image file: Enhance -> Optimize -> WebP
+        Returns: (str: output_path, int: width, int: height)
+        """
+        try:
+            img = Image.open(file_path)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            return self._process_image(img, title_keyword)
+
+        except Exception as e:
+            logger.error(f"Failed to process image {file_path}: {e}")
             return None, 0, 0
 
     def cleanup(self):

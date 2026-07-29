@@ -31,7 +31,7 @@ class BloggerCDNUploader:
             logger.error(f"Failed to load credentials for BloggerCDNUploader: {e}")
             raise
 
-    def upload_to_google_cdn(self, file_path, bucket_name=None):
+    def upload_to_google_cdn(self, file_path, bucket_name=None, blob_name=None):
         """
         Uploads image to Google Cloud Storage and returns a public URL.
         """
@@ -43,14 +43,19 @@ class BloggerCDNUploader:
             bucket = self.client.bucket(bucket_name)
             filename = os.path.basename(file_path)
             
-            # Destination path in bucket (keeping it clean)
-            blob = bucket.blob(f"blog-assets/{filename}")
+            # Destination path in bucket - use custom blob_name if provided, else default
+            if blob_name:
+                gcs_path = blob_name
+            else:
+                gcs_path = f"blog-assets/{filename}"
+            
+            blob = bucket.blob(gcs_path)
             
             # Upload the file
             blob.upload_from_filename(file_path, content_type='image/webp')
             
             # The public URL format for GCS
-            public_url = f"https://storage.googleapis.com/{bucket_name}/blog-assets/{filename}"
+            public_url = f"https://storage.googleapis.com/{bucket_name}/{gcs_path}"
             
             logger.info(f"Image hosted on GCS CDN: {public_url}")
             return public_url

@@ -379,6 +379,9 @@ Requirements:
 4. Content Quality: Focus on E-E-A-T and helpful content principles. Avoid fake statistics, fictional experts, fabricated case studies, or emojis. Use OSHA guidance accurately and only when relevant.
 5. Exclusions: Do NOT generate a Conclusion section, FAQ section, Related Articles, Images, Image placeholders, Affiliate buttons, Product sections, Call To Action, Schema, Internal links, External links, or Author box.
 
+IMPORTANT - Image Placement Markers:
+As you write the article, insert image placement markers at natural points where an explanatory image would genuinely improve reader understanding (e.g., after a complex concept explanation, after a step-by-step process section, after a comparison discussion). Use the format [IMG-1], [IMG-2], [IMG-3], etc., in ascending order of appearance. Aim for 4-8 markers total across the article. Do NOT write any image descriptions or prompts — only insert the marker tokens.
+
 Evergreen Requirement:
 All content must be evergreen. Do NOT include calendar years (2024, 2025, etc.) in titles, headings, metadata, body content, or anywhere unless the year is an objective factual requirement (e.g., OSHA updated guidance in 2024, product released in 2025, Windows 11 24H2). No marketing-style years.
 
@@ -386,46 +389,6 @@ Formatting Requirements:
 1. Format the article using clean, semantic HTML5 tags ONLY.
 2. Use only the following HTML tags: <h2>, <h3>, <p>, <ul>, <ol>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>.
 3. Do NOT include <html>, <head>, <body>, CSS, JavaScript, inline styles, or Markdown. Output raw HTML directly.
-"""
-
-INFORMATIONAL_IMAGE_PLAN_TEMPLATE = """
-You are a senior UX content architect, content strategist, and SEO specialist for RemoteProStor.com.
-Your task is to create a detailed Image Plan for the informational article.
-Do NOT generate or call any image APIs. Simply output the plan in clean, readable plain text.
-
-Topic: {topic}
-Primary Keyword: {keyword}
-Category: {category}
-
-Blueprint:
-{blueprint}
-
-Generated Article:
-{article}
-
-Instructions for the Image Plan:
-1. Recommend images ONLY where they genuinely improve reader understanding. Do NOT recommend placing images after every heading. The target number of images is 4 to 8 total.
-2. Structure the response precisely with the following sections in plain text:
-
---- Image Plan ---
-Overall Recommendation:
-[Number of recommended images]
-Reasoning:
-[Why this number/style fits the topic]
-
-[For every recommended image, repeat this block:]
-Image Number: [Number]
-Purpose: [Explain why this image is needed and what concept it clarifies]
-Placement: [Specify where in the article this image should be inserted]
-Reference Heading: [Name the H2 or H3 heading this image belongs under]
-Image Style: [Choose EXACTLY one of: Hero Photo, Realistic Workspace, Illustration, Diagram, Infographic, Checklist Graphic, Comparison Graphic]
-Aspect Ratio: [Choose EXACTLY one of: 16:9, 1:1]
-Prompt: [Write one extremely detailed, descriptive image generation prompt. It must be tailored for the US audience, highly professional, editorial quality, modern. Absolutely NO text inside the image, NO logos, NO trademarks, NO copyrighted products, NO brand names, NO watermarks. No people looking directly at the camera unless appropriate. High realism unless Illustration/Diagram/Infographic is selected.]
-Alt Text: [Write descriptive, SEO-friendly alternative text]
-Caption: [Write a clear, editorial caption explaining what is depicted]
---------------------
-
-Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in prompts, alt text, or captions. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
 """
 
 
@@ -459,6 +422,39 @@ Rules:
 - Do NOT invent new products. Only remove or rewrite off-topic content.
 - Keep the article US-focused, EEAT-compliant, and OSHA-aware where ergonomics apply.
 - If no drift is found, set drift_detected to false and return an empty corrected_html.
+"""
+
+
+INFORMATIONAL_IMAGE_PROMPT_PLAN_TEMPLATE = """
+You are an expert visual content planner for RemoteProStor.com.
+
+Input: A complete informational article with [IMG-1], [IMG-2], ... markers indicating where explanatory images should appear.
+
+Task: For EACH marker, write ONE concise image-generation prompt that FLUX.1-schnell will convert to pixels.
+
+Article:
+{article_html}
+
+Topic: {topic}
+Keyword: {keyword}
+Category: {category}
+
+STRICT RULES for every prompt:
+1. NO negation words: "free", "without", "no ", "not ", "clutter-free", "clutter free", "devoid of", "lacking", "absent", "exclude", "excluding", "never", "none", "nothing", "nowhere", "neither", "nor". Describe ONLY what IS visibly present.
+2. Structure each prompt in this order:
+   (a) Setting/location (e.g., "modern home office desk")
+   (b) 3-5 specific physical objects present (e.g., "laptop, external monitor, mechanical keyboard, ergonomic mouse, desk lamp")
+   (c) Arrangement/condition using POSITIVE descriptors (e.g., "neatly arranged", "organized", "evenly spaced", "clean surface")
+   (d) Lighting/mood last (e.g., "natural daylight", "soft ambient lighting")
+3. Max ~150 words / ~180 tokens per prompt (before style suffix added later). If you exceed, cut to last complete sentence within budget.
+4. Return ONLY valid JSON: {"IMG-1": "prompt text", "IMG-2": "prompt text", ...}
+5. Do NOT include the style suffix ", clean flat-style technical illustration, labeled, high clarity, white background" — it will be appended programmatically.
+
+Example:
+Input article has [IMG-1] after "monitor positioning" section.
+Output: {"IMG-1": "Modern home office desk with an external monitor on a monitor arm, laptop stand, ergonomic keyboard, vertical mouse, and cable management tray, neatly arranged with centered monitor at eye level, natural daylight from window"}
+
+Now process the article above. Find ALL [IMG-N] markers and return the JSON map.
 """
 
 

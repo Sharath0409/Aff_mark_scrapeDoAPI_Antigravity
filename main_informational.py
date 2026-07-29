@@ -53,71 +53,66 @@ def main():
 
     try:
         # --- STAGE 1: Generate Content Blueprint ---
-        logger.info("Stage 1/8: Generating content blueprint")
+        logger.info("Stage 1/7: Generating content blueprint")
         print("--- STAGE 1: Generating Content Blueprint ---")
         blueprint = generator.generate_informational_blueprint(topic, keyword, category)
         logger.info("Content blueprint generated successfully")
         print("Blueprint generated successfully.\n")
 
-        # --- STAGE 2: Generate Complete Article ---
-        logger.info("Stage 2/8: Generating informational article")
-        print("--- STAGE 2: Generating Informational Article ---")
-        article = generator.generate_informational_article(blueprint, topic, keyword, category)
+        # --- STAGE 2: Generate Article with Image Markers (Call 1) ---
+        logger.info("Stage 2/7: Generating informational article with image markers")
+        print("--- STAGE 2: Generating Informational Article with Markers ---")
+        article_with_markers = generator.generate_informational_article(blueprint, topic, keyword, category)
         logger.info("Informational article generated successfully")
         print("Article generated successfully.\n")
 
-        # --- STAGE 3: Generate Image Plan ---
-        logger.info("Stage 3/8: Generating image plan")
-        print("--- STAGE 3: Generating Image Plan ---")
-        image_plan = generator.generate_image_plan(blueprint, article, topic, keyword, category)
-        logger.info("Image plan generated successfully")
-        print("Image plan generated successfully.\n")
-
-        # --- STAGE 4: Generate, Optimize, Upload Images ---
-        logger.info("Stage 4/8: Generating and uploading article images")
-        print("--- STAGE 4: Generating and Uploading Images ---")
-        image_manifest = generator.generate_article_images(image_plan, topic)
-        logger.info(f"Image manifest created with {len(image_manifest)} images")
-        print(f"Image manifest created with {len(image_manifest)} images.\n")
-
-        # --- STAGE 5: Inject Images into Article ---
-        logger.info("Stage 5/8: Injecting images into article")
-        print("--- STAGE 5: Injecting Images into Article ---")
-        html_with_images = generator.inject_images_into_article(article, image_manifest)
-        logger.info("Images injected into article successfully")
-        print("Images injected successfully.\n")
-
-        # --- STAGE 6: Internal Linking ---
-        logger.info("Stage 6/8: Generating internal links")
-        print("--- STAGE 6: Generating Internal Links ---")
-        link_manager.refresh_corpus()
-        final_html = link_manager.link_informational_article(html_with_images, topic, category)
-        logger.info("Internal links generated successfully")
-        print("Internal links generated successfully.\n")
-
-        # --- STAGE 7: Blogger Publishing ---
-        logger.info("Stage 7/8: Publishing to Blogger")
-        print("--- STAGE 7: Publishing to Blogger ---")
+        # --- STAGE 3: Publish FIRST to get Blogger Post ID ---
+        logger.info("Stage 3/7: Publishing to Blogger to get Post ID")
+        print("--- STAGE 3: Publishing to Blogger (get Post ID) ---")
         seo_labels = generator.generate_seo_tags(topic, keyword)
         if category not in seo_labels:
             seo_labels.append(category)
         
-        published_url, post_id = publisher.publish_post(topic, final_html, labels=seo_labels)
-        logger.info(f"Article published successfully: {published_url} (Post ID: {post_id})")
+        published_url, post_id = publisher.publish_post(topic, article_with_markers, labels=seo_labels)
+        logger.info(f"Article published (with markers): {published_url} (Post ID: {post_id})")
         print(f"Published to Blogger: {published_url}")
         print(f"Post ID: {post_id}\n")
 
-        # --- STAGE 8: Google Sheets Updates ---
-        logger.info("Stage 8/8: Updating Google Sheets")
-        print("--- STAGE 8: Updating Google Sheets ---")
+        # --- STAGE 4: Generate Images and UPDATE Blogger Post (Call 2 + 3) ---
+        logger.info("Stage 4/7: Generating images via HF and updating Blogger post")
+        print("--- STAGE 4: Generating Images via HF and Updating Blogger ---")
+        article_with_images, image_manifest = generator.generate_images_and_update_post(
+            article_with_markers, post_id, topic, keyword, category, publisher
+        )
+        logger.info("Images generated and Blogger post updated")
+        print("Images generated and Blogger post updated.\n")
+
+        # --- STAGE 5: Internal Linking ---
+        logger.info("Stage 5/7: Generating internal links")
+        print("--- STAGE 5: Generating Internal Links ---")
+        link_manager.refresh_corpus()
+        final_html = link_manager.link_informational_article(article_with_images, topic, category)
+        logger.info("Internal links generated successfully")
+        print("Internal links generated successfully.\n")
+
+        # --- STAGE 6: Update Blogger Post with Internal Links ---
+        logger.info("Stage 6/7: Updating Blogger post with internal links")
+        print("--- STAGE 6: Updating Blogger Post with Internal Links ---")
+        publisher.update_post(post_id, {"content": final_html, "labels": seo_labels})
+        logger.info("Blogger post updated with internal links")
+        print("Blogger post updated with internal links.\n")
+
+        # --- STAGE 7: Google Sheets Updates ---
+        logger.info("Stage 7/7: Updating Google Sheets")
+        print("--- STAGE 7: Updating Google Sheets ---")
         sheets.update_row_status(row_index, "Success", url=published_url, post_id=post_id)
         sheets.update_dashboard_stats("Success")
-        sheets.log_execution(topic, "Success", url=published_url, post_id=post_id)
+        sheets.log_execution(topic, "Success", url=published_url)
         logger.info("Google Sheets updated successfully")
         print("Google Sheets updated successfully.\n")
 
         # --- SUCCESS: Send Email Notification ---
-        success_message = f"Informational article published successfully.\n\nTopic: {topic}\nURL: {published_url}\nPost ID: {post_id}"
+        success_message = f"Informational article published successfully.\n\nTopic: {topic}\nURL: {published_url}\nPost ID: {post_id}\nImages: {len(image_manifest)}"
         notifier.send_report("Informational Article Published", topic, success_message)
         logger.info("Success email notification sent")
 
