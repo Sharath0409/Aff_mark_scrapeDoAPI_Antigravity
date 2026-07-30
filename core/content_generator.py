@@ -197,6 +197,70 @@ class ContentGenerator:
 
         return str(soup).strip()
 
+    def _remove_marketing_years(self, soup: BeautifulSoup, topic: str):
+        """Remove marketing-style years from content while preserving factual years.
+        
+        Factual years to PRESERVE:
+        - OSHA guidance updates (e.g., "OSHA updated guidance in 2024")
+        - Product release years (e.g., "released in 2025")
+        - Version numbers (e.g., "Windows 11 24H2", "23H2")
+        
+        Marketing years to REMOVE:
+        - "Best of 2024", "2025 Guide", "for 2024", "in 2025"
+        - "Updated for 2024", "2024 Review", "Top Picks 2025"
+        - Any year used for marketing freshness rather than factual accuracy
+        """
+        import re
+        
+        # Pattern to match years 2020-2099
+        year_pattern = re.compile(r'\b(20\d{2})\b')
+        
+        # Factual year context patterns that should be preserved
+        factual_contexts = [
+            r'OSHA.*?(?:updated|guidance|standard).*?\b20\d{2}\b',
+            r'\b20\d{2}\b.*?OSHA.*?(?:updated|guidance|standard)',
+            r'(?:released|launched|introduced|announced).*?\b20\d{2}\b',
+            r'\b20\d{2}\b.*?(?:released|launched|introduced|announced)',
+            r'Windows\s+\d+\s+\d{2}H\d',  # Windows 11 24H2
+            r'version\s+\d{2}H\d',  # version 24H2
+            r'\b20\d{2}\s*(?:version|release|model)',  # 2024 version
+            r'(?:firmware|driver|software)\s+\d{4}',  # firmware 2024
+        ]
+        
+        for text_node in soup.find_all(string=True):
+            if text_node.parent and text_node.parent.name in {"script", "style"}:
+                continue
+            
+            original = str(text_node)
+            updated = original
+            
+            # Check if this text contains any factual year contexts
+            has_factual_context = False
+            for pattern in factual_contexts:
+                if re.search(pattern, original, re.IGNORECASE):
+                    has_factual_context = True
+                    break
+            
+            if not has_factual_context:
+                # Remove marketing-style years
+                # Pattern: "Best of 2024", "2025 Guide", "for 2024", "in 2025", "Updated for 2024", "2024 Review", "Top Picks 2025"
+                marketing_year_patterns = [
+                    r'\b(?:Best|Top|Updated|Review|Guide|Picks?)\s+(?:of\s+|for\s+|in\s+)?(20\d{2})\b',
+                    r'\b(20\d{2})\s+(?:Guide|Review|Update|Edition|Version)\b',
+                    r'\b(?:for|in)\s+(20\d{2})\b',  # "for 2024", "in 2025"
+                    r'\b(?:Updated|Refreshed)\s+(?:for|in)\s+(20\d{2})\b',
+                    r'\b(20\d{2})\s*(?:Edition|Update)\b',
+                ]
+                
+                for pattern in marketing_year_patterns:
+                    updated = re.sub(pattern, '', updated, flags=re.IGNORECASE)
+                
+                # Clean up any double spaces left by removals
+                updated = re.sub(r'\s+', ' ', updated).strip()
+            
+            if updated != original:
+                text_node.replace_with(updated)
+        
     def validate_image_prompt(self, prompt: str, marker_id: str) -> tuple[str, bool]:
         """
         Check prompt for negation words and token budget.
