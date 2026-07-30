@@ -78,6 +78,10 @@ class DeepseekChatCompletions:
         self.client = client
 
     def create(self, model, messages, temperature=0.7, **kwargs):
+        # Accept common OpenAI-style model names and map them to Deepseek equivalents
+        if model in {"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4o-mini"}:
+            model = "deepseek-v4-flash"
+
         payload = {
             "model": model,
             "messages": messages,
