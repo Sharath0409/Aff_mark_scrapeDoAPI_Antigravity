@@ -553,6 +553,8 @@ class ContentGenerator:
         
         optimizer.cleanup()
         return final_html, manifest
+
+    def generate_full_post(self, topic: str, keyword: str, products: list) -> str:
         """Assemble the complete blog post with visual styling and all requested sections."""
         logger.info("Starting full post generation")
         
@@ -777,3 +779,28 @@ class ContentGenerator:
         elif article_html.startswith("```"):
             article_html = article_html.split("```")[1].split("```")[0].strip()
         return sanitize_html(article_html)
+
+    def generate_seo_tags(self, topic: str, keyword: str) -> list:
+        """Generate SEO labels for Blogger."""
+        logger.info(f"Generating SEO tags for: {topic}")
+        prompt = SEO_TAGS_TEMPLATE.format(topic=topic, keyword=keyword)
+        result = self.generate_section(prompt, model="deepseek-v4-flash")
+        # Strip HTML tags just in case
+        result = result.replace('<p>', '').replace('</p>', '').replace('\n', '').strip()
+        tags = [tag.strip() for tag in result.replace('"', '').split(',') if tag.strip()]
+        
+        # Sanitize tags and enforce Blogger's strict 200 character limit for ALL labels combined
+        safe_tags = []
+        total_length = 0
+        for tag in tags:
+            # Only allow alphanumeric, spaces, and hyphens
+            safe_tag = re.sub(r'[^a-zA-Z0-9\s\-]', '', tag).strip()
+            # Safety fallback: Strip any 4-digit years (e.g. 2023, 2024)
+            safe_tag = re.sub(r'\b\d{4}\b', '', safe_tag).strip()
+            
+            if safe_tag and safe_tag not in safe_tags:
+                if total_length + len(safe_tag) + 1 < 180: # Keep a safe buffer
+                    safe_tags.append(safe_tag)
+                    total_length += len(safe_tag) + 1
+                
+        return safe_tags
