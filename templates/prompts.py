@@ -447,12 +447,12 @@ STRICT RULES for every prompt:
    (c) Arrangement/condition using POSITIVE descriptors (e.g., "neatly arranged", "organized", "evenly spaced", "clean surface")
    (d) Lighting/mood last (e.g., "natural daylight", "soft ambient lighting")
 3. Max ~150 words / ~180 tokens per prompt (before style suffix added later). If you exceed, cut to last complete sentence within budget.
-4. Return ONLY valid JSON: {"IMG-1": "prompt text", "IMG-2": "prompt text", ...}
+4. Return ONLY valid JSON: {{"IMG-1": "prompt text", "IMG-2": "prompt text", ...}}
 5. Do NOT include the style suffix ", clean flat-style technical illustration, labeled, high clarity, white background" — it will be appended programmatically.
 
 Example:
 Input article has [IMG-1] after "monitor positioning" section.
-Output: {"IMG-1": "Modern home office desk with an external monitor on a monitor arm, laptop stand, ergonomic keyboard, vertical mouse, and cable management tray, neatly arranged with centered monitor at eye level, natural daylight from window"}
+Output: {{"IMG-1": "Modern home office desk with an external monitor on a monitor arm, laptop stand, ergonomic keyboard, vertical mouse, and cable management tray, neatly arranged with centered monitor at eye level, natural daylight from window"}}
 
 Now process the article above. Find ALL [IMG-N] markers and return the JSON map.
 """

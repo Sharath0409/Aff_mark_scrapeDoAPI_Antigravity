@@ -464,8 +464,10 @@ class ContentGenerator:
     def generate_image_prompt_plan(self, article_html: str, topic: str, keyword: str, category: str) -> str:
         """CALL 2: Generate prompt plan from full article with markers. Returns JSON string."""
         logger.info(f"Generating image prompt plan for: {topic}")
+        # Escape curly braces in article_html to prevent .format() from interpreting them as placeholders
+        safe_article_html = article_html.replace("{", "{{").replace("}", "}}")
         prompt = INFORMATIONAL_IMAGE_PROMPT_PLAN_TEMPLATE.format(
-            article_html=article_html,
+            article_html=safe_article_html,
             topic=topic,
             keyword=keyword,
             category=category
