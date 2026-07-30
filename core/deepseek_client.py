@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 from urllib.parse import urljoin
 import requests
+import logging
 
 
 class DeepseekResponse(SimpleNamespace):
@@ -55,6 +56,14 @@ class DeepseekHttpClient:
     def _request(self, path, payload):
         url = urljoin(self.base_url + "/", path.lstrip("/"))
         response = self.session.post(url, json=payload, timeout=60)
+        # If the API returned a client/server error, log the body for debugging
+        if response.status_code >= 400:
+            logging.getLogger(__name__).error(
+                "Deepseek API error %s for %s: %s",
+                response.status_code,
+                url,
+                response.text,
+            )
         response.raise_for_status()
         return response.json()
 
