@@ -17,9 +17,47 @@ from core.internal_linker import InternalLinkManager
 from utils.text_cleaner import normalize_topic
 from utils.image_optimizer import ImageOptimizer
 from utils.image_uploader import BloggerCDNUploader
-from scripts.remove_h1_tags import BloggerH1Remover
+from bs4 import BeautifulSoup
 
 logger = get_logger("pipeline")
+
+
+class BloggerH1Remover:
+    """Remove/convert H1 tags in post content.
+    
+    - Deletes H1 if it matches the post title
+    - Converts other H1 tags to H2
+    """
+    def __init__(self, dry_run=True):
+        self.dry_run = dry_run
+
+    def clean_post_h1(self, title, content):
+        """Processes the H1 tags in the content. Returns (new_content, did_change)."""
+        if not content or not content.strip():
+            return content, False
+
+        soup = BeautifulSoup(content, "html.parser")
+        h1_tags = soup.find_all("h1")
+        if not h1_tags:
+            return content, False
+
+        did_change = False
+        normalized_title = title.strip().lower()
+
+        for h1 in h1_tags:
+            h1_text = h1.get_text().strip().lower()
+            # If the H1 matches the post title, delete it
+            if h1_text == normalized_title:
+                h1.decompose()
+                logger.info(f"  Deleted H1 matching title: '{h1_text}'")
+                did_change = True
+            else:
+                # Rename the H1 tag to H2
+                h1.name = "h2"
+                logger.info(f"  Converted H1 to H2: '{h1_text}'")
+                did_change = True
+
+        return str(soup), did_change
 
 
 def process_row(

@@ -302,7 +302,7 @@ class InternalLinkManager:
         </div>
         """
 
-def _count_posts_in_category(self, category: str) -> int:
+    def _count_posts_in_category(self, category: str) -> int:
         """Count published posts in a given category/label."""
         if not self.corpus:
             self.refresh_corpus()
