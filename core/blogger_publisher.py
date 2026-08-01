@@ -52,6 +52,10 @@ def insert_jump_break(html: str) -> str:
     return str(soup)
 
 
+# Alias for backward compatibility
+insert_jump_break_after_first_paragraph = insert_jump_break
+
+
 def validate_content(content: str, min_length: int = 100) -> bool:
     """Validate that content is suitable for publishing.
     
@@ -107,9 +111,16 @@ class BloggerPublisher:
             raise
         
     @get_retry_decorator()
-    def publish_post(self, title, content, labels=None):
-        """Publish HTML payload to Blogger."""
-        logger.info(f"Publishing post to Blogger: {title}")
+    def publish_post(self, title, content, labels=None, is_draft=False):
+        """Publish HTML payload to Blogger.
+        
+        Args:
+            title: Post title
+            content: HTML content
+            labels: List of labels/tags
+            is_draft: If True, publish as draft. Default False for backward compatibility.
+        """
+        logger.info(f"Publishing post to Blogger: {title} (draft={is_draft})")
         
         if labels is None:
             labels = []
@@ -130,15 +141,43 @@ class BloggerPublisher:
         
         try:
             posts = self.service.posts()
-            request = posts.insert(blogId=self.blog_id, body=body, isDraft=False)
+            request = posts.insert(blogId=self.blog_id, body=body, isDraft=is_draft)
             response = request.execute()
             url = response.get('url')
             post_id = response.get('id')
-            logger.info(f"Post successfully published: {url} (ID: {post_id})")
+            status = "draft" if is_draft else "published"
+            logger.info(f"Post successfully {status}: {url} (ID: {post_id})")
             return url, post_id
         except Exception as e:
             logger.error(f"Error publishing to Blogger: {e}")
             raise
+
+    @get_retry_decorator()
+    def publish_post_as_draft(self, title, content, labels=None):
+        """Publish HTML payload to Blogger as a draft."""
+        return self.publish_post(title, content, labels, is_draft=True)
+
+    @get_retry_decorator()
+    def set_post_status(self, post_id, is_draft):
+        """Update post draft/published status.
+        
+        Args:
+            post_id: Blogger post ID
+            is_draft: True to set as draft, False to publish
+        """
+        logger.info(f"Setting post {post_id} status to {'draft' if is_draft else 'published'}")
+        try:
+            post = self.get_post(post_id)
+            post['status'] = 'DRAFT' if is_draft else 'LIVE'
+            return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post).execute()
+        except Exception as e:
+            logger.error(f"Error setting post status: {e}")
+            raise
+
+    @get_retry_decorator()
+    def publish_draft_post(self, post_id):
+        """Publish a previously drafted post."""
+        return self.set_post_status(post_id, is_draft=False)
 
     @get_retry_decorator()
     def get_post(self, post_id):

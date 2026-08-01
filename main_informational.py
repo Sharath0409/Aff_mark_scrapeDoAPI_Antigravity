@@ -86,16 +86,16 @@ def main():
 
         print(f"Validation PASSED: {validation_details.get('named_product_count', 0)} named products found")
 
-        # --- STAGE 3: Publish FIRST to get Blogger Post ID ---
-        logger.info("Stage 3/7: Publishing to Blogger to get Post ID")
-        print("--- STAGE 3: Publishing to Blogger (get Post ID) ---")
+        # --- STAGE 3: Publish FIRST as DRAFT to get Blogger Post ID ---
+        logger.info("Stage 3/7: Publishing to Blogger as draft to get Post ID")
+        print("--- STAGE 3: Publishing to Blogger as draft (get Post ID) ---")
         seo_labels = generator.generate_seo_tags(topic, keyword)
         if category not in seo_labels:
             seo_labels.append(category)
         
-        published_url, post_id = publisher.publish_post(topic, article_with_markers, labels=seo_labels)
-        logger.info(f"Article published (with markers): {published_url} (Post ID: {post_id})")
-        print(f"Published to Blogger: {published_url}")
+        published_url, post_id = publisher.publish_post_as_draft(topic, article_with_markers, labels=seo_labels)
+        logger.info(f"Article published as draft (with markers): {published_url} (Post ID: {post_id})")
+        print(f"Published as draft to Blogger: {published_url}")
         print(f"Post ID: {post_id}\n")
 
         # --- STAGE 4: Generate Images and UPDATE Blogger Post (Call 2 + 3) ---
@@ -130,6 +130,13 @@ def main():
         sheets.log_execution(topic, "Success", url=published_url)
         logger.info("Google Sheets updated successfully")
         print("Google Sheets updated successfully.\n")
+
+        # --- STAGE 8: Publish the draft post ---
+        logger.info("Stage 8/8: Publishing draft post to live")
+        print("--- STAGE 8: Publishing Draft Post to Live ---")
+        publisher.publish_draft_post(post_id)
+        logger.info(f"Draft post {post_id} published successfully")
+        print("Draft post published successfully.\n")
 
         # --- SUCCESS: Send Email Notification ---
         success_message = f"Informational article published successfully.\n\nTopic: {topic}\nURL: {published_url}\nPost ID: {post_id}\nImages: {len(image_manifest)}"

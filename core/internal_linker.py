@@ -134,11 +134,22 @@ class InternalLinkManager:
             logger.error(f"Error injecting internal links: {e}")
             return html_content
 
-    def add_related_section(self, html_content: str, related_articles: List[Dict]) -> str:
-        """Append a clean 'Related Articles' section at the end."""
+    def add_related_section(self, html_content: str, related_articles: List[Dict], category: str = None) -> str:
+        """Append a clean 'Related Articles' section at the end.
+        
+        Only adds the section if the category has 3+ published posts.
+        """
         if not related_articles:
             return html_content
-
+            
+        # Check category post count if provided
+        if category:
+            category_post_count = self._count_posts_in_category(category)
+            logger.info(f"Category '{category}' has {category_post_count} published posts for related section")
+            if category_post_count < 3:
+                logger.info(f"Skipping Related Articles section for category '{category}' (only {category_post_count} posts, need 3+)")
+                return html_content
+        
         links_html = "".join([f'<li><a href="{a["url"]}">{a["title"]}</a></li>' for a in related_articles])
         section_html = f"""
         <div class="related-articles-section" style="margin-top: 50px; border-top: 2px solid #eee; padding-top: 30px; margin-bottom: 30px;">
@@ -291,11 +302,26 @@ class InternalLinkManager:
         </div>
         """
 
+def _count_posts_in_category(self, category: str) -> int:
+        """Count published posts in a given category/label."""
+        if not self.corpus:
+            self.refresh_corpus()
+        
+        count = 0
+        cat_lower = category.lower().strip()
+        for post in self.corpus:
+            post_labels = [l.lower().strip() for l in post.get('labels', [])]
+            if cat_lower in post_labels:
+                count += 1
+        return count
+
     def link_informational_article(self, html_content: str, topic: str, category: str) -> str:
         """Link an informational article to both related informational and commercial articles.
 
         Selection prioritizes topic, keyword, and category similarity using existing similarity logic.
         Avoids duplicate links and self-linking. Contextually injects links and appends a split Related Articles section.
+        
+        Only generates Related Articles section if the category has 3+ published posts.
         """
         logger.info(f"Running internal linking for informational article: {topic}")
         
@@ -307,6 +333,11 @@ class InternalLinkManager:
             logger.warning("No corpus available. Returning unmodified HTML.")
             return html_content
 
+        # Check if category has 3+ posts for related articles section
+        category_post_count = self._count_posts_in_category(category)
+        logger.info(f"Category '{category}' has {category_post_count} published posts")
+        generate_related_section = category_post_count >= 3
+        
         # Find related informational articles using existing AI method (target 3)
         related_info = []
         if self.corpus:
@@ -334,32 +365,47 @@ class InternalLinkManager:
         # Contextually inject links using the existing AI method
         html_with_links = self.inject_internal_links(html_content, all_selected)
 
-        # Generate the 'Related Articles' section at the end (informational + commercial guides)
-        related_section_html = self._generate_split_related_section(related_info, commercial_guides)
-
-        # Insert section before footer or closing div
-        if "<footer>" in html_with_links:
-            html_with_links = html_with_links.replace("<footer>", related_section_html + "<footer>")
-        elif "<footer" in html_with_links:
-            html_with_links = html_with_links.replace("<footer", related_section_html + "<footer")
-        else:
-            parts = html_with_links.rsplit("</div>", 1)
-            if len(parts) == 2:
-                html_with_links = parts[0] + related_section_html + "</div>" + parts[1]
+        # Generate the 'Related Articles' section at the end ONLY if category has 3+ posts
+        if generate_related_section:
+            related_section_html = self._generate_split_related_section(related_info, commercial_guides)
+            
+            # Insert section before footer or closing div
+            if "<footer>" in html_with_links:
+                html_with_links = html_with_links.replace("<footer>", related_section_html + "<footer>")
+            elif "<footer" in html_with_links:
+                html_with_links = html_with_links.replace("<footer", related_section_html + "<footer")
             else:
-                html_with_links = html_with_links + related_section_html
+                parts = html_with_links.rsplit("</div>", 1)
+                if len(parts) == 2:
+                    html_with_links = parts[0] + related_section_html + "</div>" + parts[1]
+                else:
+                    html_with_links = html_with_links + related_section_html
+        else:
+            logger.info(f"Skipping Related Articles section for category '{category}' (only {category_post_count} posts, need 3+)")
 
         return html_with_links
 
     def _generate_split_related_section(self, related_info: List[Dict], commercial_guides: List[Dict]) -> str:
-        """Generate HTML block containing split list of related guides and recommendations."""
-        info_links = "".join([f'<li><a href="{a["url"]}">{a["title"]}</a></li>' for a in related_info])
-        comm_links = "".join([
-            f'<li><a href="{g["url"]}">{g["title"]}</a> '
-            f'<span class="relevance-badge" style="font-size:0.8em;color:#666;"> '
-            f'(relevance: {g["relevance_score"]:.2f})</span></li>'
-            for g in commercial_guides
-        ])
+        """Generate HTML block containing split list of related guides and recommendations.
+        
+        Handles edge cases where either list might be empty or have missing keys.
+        """
+        # Build informational links
+        info_links = ""
+        if related_info:
+            for a in related_info:
+                if isinstance(a, dict) and a.get('url') and a.get('title'):
+                    info_links += f'<li><a href="{a["url"]}">{a["title"]}</a></li>'
+        
+        # Build commercial links
+        comm_links = ""
+        if commercial_guides:
+            for g in commercial_guides:
+                if isinstance(g, dict) and g.get('url') and g.get('title'):
+                    relevance = g.get('relevance_score', 0)
+                    comm_links += f'<li><a href="{g["url"]}">{g["title"]}</a> '
+                    comm_links += f'<span class="relevance-badge" style="font-size:0.8em;color:#666;"> '
+                    comm_links += f'(relevance: {relevance:.2f})</span></li>'
         
         sections = []
         if info_links:
@@ -380,6 +426,9 @@ class InternalLinkManager:
                 </ul>
             </div>
             """)
+        
+        if not sections:
+            return ""
         
         inner_content = "\n".join(sections)
         

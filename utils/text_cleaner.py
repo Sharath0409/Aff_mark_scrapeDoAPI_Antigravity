@@ -37,6 +37,7 @@ def sanitize_html(html_str):
     - Converts markdown to HTML if needed
     - Strips whitespace
     - Removes markdown code fences if present
+    - Ensures no raw markdown headers (# ) leak into output
     """
     if not html_str:
         return ""
@@ -60,6 +61,10 @@ def sanitize_html(html_str):
         # Mixed content - try to convert markdown portions
         # For safety, convert the whole thing
         html_str = convert_markdown_to_html(html_str)
+    
+    # Final safety: strip any remaining raw markdown headers that weren't converted
+    # This catches cases where markdown conversion missed something
+    html_str = re.sub(r'^#{1,6}\s+(.+)$', r'<h2>\1</h2>', html_str, flags=re.MULTILINE)
     
     return html_str.strip()
 

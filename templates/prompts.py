@@ -139,6 +139,11 @@ If validation fails, automatically regenerate that section until validation succ
 INTRO_TEMPLATE = """
 Write an H1 and a highly engaging, trustworthy, editorial-quality introduction (2-4 paragraphs) for a guide on '{topic}'.
 
+CRITICAL KEYWORD PLACEMENT:
+- The primary keyword '{keyword}' MUST appear in the H1 title
+- The primary keyword '{keyword}' MUST appear in the first paragraph of the introduction
+- The primary keyword '{keyword}' MUST appear in at least one H2 heading in the article
+
 Instructions:
 1. Opening Structure: Naturally address a common, frustrating pain point related to '{keyword}'. Explain why choosing the right product matters, highlight common buyer mistakes, briefly outline the evaluation criteria, and state exactly what the reader will learn.
 2. Strict EEAT Rules: Establish authority using neutral editorial language (e.g., "Choosing the right product can be challenging...", "Based on manufacturer specifications, verified customer feedback, and practical workplace considerations"). NEVER pretend to have personally used or tested the products. Do NOT write "I tested," "I solved this problem," "My experience," "I've been using," or "I recommend because I own."
@@ -148,7 +153,7 @@ Instructions:
 6. Topic Consistency: Every sentence must support the '{topic}'. Never mention products outside the current article category.
 7. Writing Style & SEO: Professional, editorial, helpful, conversational, human, and trustworthy. Avoid AI-sounding phrases, keyword stuffing, marketing hype, generic filler (like "In today's fast-paced world"), and repetitive wording. Naturally include the primary keyword '{keyword}', but write for humans first.
 8. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the title, headings, or body. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., OSHA guidance updated in 2024, product released in 2025).
-9. Validation: Before returning the introduction verify: 1) No fake personal experience is claimed, 2) No hallucinated claims exist, 3) No unrelated products are mentioned, 4) The content is US-focused, 5) Topic consistency is 100%, 6) The text is Helpful Content compliant, 7) No marketing-style years are present. If validation fails, regenerate until it passes.
+9. Validation: Before returning the introduction verify: 1) No fake personal experience is claimed, 2) No hallucinated claims exist, 3) No unrelated products are mentioned, 4) The content is US-focused, 5) Topic consistency is 100%, 6) The text is Helpful Content compliant, 7) No marketing-style years are present. 8) Primary keyword '{keyword}' appears in H1, first paragraph, and at least one H2. If validation fails, regenerate until it passes.
 """
 
 
@@ -164,21 +169,26 @@ Title: {title}
 Price: {price}
 Rating: {rating} ({review_count} reviews)
 Features: {features}
+Product URL: {url}
 
 Instructions:
 1. Start with a <div class="verdict-box">. Write a 3-sentence summary: The 'Best For' use case, a quick win, and one major caveat based on available specifications.
 2. Write a 150-word analysis. Evaluate the product using supplied information, manufacturer specifications, verified customer feedback, common real-world usage scenarios, and workplace productivity best practices.
 3. Use a <ul> for 'The Specs'. Do not invent specifications; use only provided facts.
 4. Use a <div class="pros-cons-grid"> containing <div class="pros-list"><h4>Pros</h4><ul>...</ul></div> and <div class="cons-list"><h4>Cons</h4><ul>...</ul></div>.
-5. Tone & Trust: Write like a senior US editorial reviewer using neutral wording (e.g., "Based on available specifications," "For most US remote workers," "When comparing similar products"). NEVER fabricate personal experience (e.g., do NOT use "In my week of testing," "I tested," "I found," "After using," or "I personally recommend"). Do NOT invent facts, ratings, review counts, battery life, dimensions, compatibility, performance, certifications, OSHA approval, or medical claims.
-6. Context Rules: Discuss ONLY the supplied product. Do not mention products from previous articles, placeholder products, or deviate from the article topic.
-7. Ergonomics: If evaluating an ergonomic product (mouse, keyboard, chair, desk, monitor arm, lighting, standing desk, footrest, workstation accessories), incorporate OSHA-aligned ergonomic best practices (e.g., neutral wrist position, reduced repetitive strain, comfortable long-session use, proper hand positioning, avoid excessive wrist extension) where naturally appropriate. Do NOT claim OSHA certification.
-8. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the review. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
+5. Include the Amazon affiliate link in a natural way within the review. The product URL will be provided.
+6. Tone & Trust: Write like a senior US editorial reviewer using neutral wording (e.g., "Based on available specifications," "For most US remote workers," "When comparing similar products"). NEVER fabricate personal experience (e.g., do NOT use "In my week of testing," "I tested," "I found," "After using," or "I personally recommend"). Do NOT invent facts, ratings, review counts, battery life, dimensions, compatibility, performance, certifications, OSHA approval, or medical claims.
+7. Context Rules: Discuss ONLY the supplied product. Do not mention products from previous articles, placeholder products, or deviate from the article topic.
+8. Ergonomics: If evaluating an ergonomic product (mouse, keyboard, chair, desk, monitor arm, lighting, standing desk, footrest, workstation accessories), incorporate OSHA-aligned ergonomic best practices (e.g., neutral wrist position, reduced repetitive strain, comfortable long-session use, proper hand positioning, avoid excessive wrist extension) where naturally appropriate. Do NOT claim OSHA certification.
+9. Every equipment/product mention must include a specific product name with price range and brief reasoning - no generic category mentions (e.g., "a quality webcam") without a named product attached.
+10. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the review. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
 """
 
 COMPARISON_TEMPLATE = """
 Start with an H2 heading: 'At a Glance: How They Compare'.
 Generate a highly accurate, trustworthy, easy-to-read, transposed HTML comparison table comparing ONLY the products supplied.
+
+CRITICAL: The article MUST cover 5-7 products. The comparison table MUST include ALL products as columns.
 
 Instructions:
 1. Strict Product Validation: ONLY compare products supplied in this article. NEVER introduce products from previous articles, placeholder products, hallucinated products, or dummy products. NEVER compare products outside the article category (e.g., no standing desks in a mouse article).
@@ -188,9 +198,10 @@ Instructions:
 5. Verdict Row: Generate a 'Verdict' row (e.g., Best Overall, Best Budget, Best Specialized Choice) ONLY if supported by the reviewed products. The verdict must reference products already discussed. Never invent new recommendations.
 6. Price Handling: If current pricing is available from the supplied data, display it. If pricing is unavailable, display "Check Current Price". NEVER invent prices.
 7. HTML Requirements: Use <table class="comparison-table"> with a proper <thead> block containing product names in <th> elements, and a <tbody> block containing the attribute rows in <tr><td> elements. The first <th> in <thead> and the first <td> in each row must be the attribute label. The last <tbody> row must be the 'Verdict' row. Each Verdict cell must contain a button-styled link: <a href="link" class="btn">Check Current Price</a>. Do NOT use <th> inside <tbody>. Do NOT change CSS classes, button styling, or layout.
-8. US Focus & Readability: Write for US buyers in American English, highlighting differences important to remote workers, home office users, freelancers, and knowledge workers. Keep rows concise, avoid unnecessary technical jargon, and highlight practical buying differences.
-9. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the comparison table. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
-10. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%, 7) Table uses <thead> and <tbody> correctly, 8) No marketing-style years present. If validation fails, automatically regenerate until it succeeds.
+8. The table MUST have 5-7 product columns (one for each product) plus one attribute label column. All 5-7 products must be represented.
+9. US Focus & Readability: Write for US buyers in American English, highlighting differences important to remote workers, home office users, freelancers, and knowledge workers. Keep rows concise, avoid unnecessary technical jargon, and highlight practical buying differences.
+10. Evergreen Requirement: Do NOT include calendar years (2024, 2025, etc.) in the comparison table. Write evergreen content. Only mention a year if it is an objective factual requirement (e.g., product released in 2025).
+11. Validation: Before returning the table verify: 1) Every compared product exists in the supplied product list, 2) Every attribute exists in supplied product data, 3) No duplicate rows, 4) No hallucinated specifications, 5) No unrelated products, 6) Topic consistency is 100%, 7) Table uses <thead> and <tbody> correctly, 8) No marketing-style years present. 9) Table has 5-7 product columns. If validation fails, automatically regenerate until it succeeds.
 """
 
 FAQ_TEMPLATE = """
@@ -390,38 +401,43 @@ SINGLE KEYWORD FOCUS: This article MUST target EXACTLY ONE primary topic: "{topi
 === MONETIZATION STRUCTURE (REQUIRED FOR EQUIPMENT/PRODUCT TOPICS) ===
 If the article discusses equipment, tools, products, or purchasable items:
 
-A. NAMED PRODUCTS REQUIRED:
+A. NAMED PRODUCTS REQUIRED (5-7 products):
    - Every generic product category mentioned (e.g., "a quality webcam", "an ergonomic chair") 
-     MUST be replaced with 2-3 SPECIFIC, REAL, CURRENTLY-SOLD product names.
+     MUST be replaced with 5-7 SPECIFIC, REAL, CURRENTLY-SOLD product names.
    - Each named product MUST include:
      * One-sentence "why this one" justification
      * Approximate price range (e.g., "$150–$200")
+     * Amazon affiliate link (will be added programmatically)
    - Do NOT invent fictional products. Use well-known real products currently sold in the US.
+   - Every equipment/product mention throughout the article body MUST tie back to one of these 5-7 named products, not a generic category.
 
-B. RECOMMENDATIONS TABLE:
-   For each major equipment section, generate a markdown table with columns:
-   | Budget Pick | Mid-Range Pick | Premium Pick |
-   |-------------|----------------|--------------|
-   | Real Product Name ($XX–$XX) | Real Product Name ($XX–$XX) | Real Product Name ($XX–$XX) |
-   Populate each cell with a real named product appropriate to the category.
+B. COMPARISON TABLE (REQUIRED):
+   Generate a comprehensive markdown comparison table covering ALL 5-7 products side-by-side with columns:
+   | Product Name | Price | Key Spec/Feature | Rating | Verdict |
+   |--------------|-------|------------------|--------|---------|
+   | Real Product ($XX–$XX) | ... | ... | ... | ... |
+   This table must match the "Side-by-Side: How They Compare" style and include all 5-7 products.
 
-C. AUTHOR/CITATION SIGNALS:
-   - Include at least ONE linked citation to a REAL NAMED authoritative source 
-     (e.g., "OSHA Guidelines on Computer Workstations (https://www.osha.gov/ergonomics)" 
-     not just "OSHA guidelines").
-   - Generate a short AUTHOR BIO BLOCK (2-3 sentences, consistent persona) appended at the end:
-     "Written by [Name], a workplace productivity consultant with 10+ years advising US remote teams 
-     on ergonomic setups and home office optimization. [Name] has contributed to [Real Publication] 
-     and specializes in evidence-based workspace design."
+C. OSHA/NIOSH CITATIONS (REQUIRED FOR ERGONOMICS TOPICS):
+   - Cite SPECIFIC, REAL OSHA and NIOSH standards/publications with actual URLs
+   - Examples of valid citations:
+     * "OSHA Guidelines on Computer Workstations (https://www.osha.gov/ergonomics)"
+     * "NIOSH Publication 97-117: Ergonomic Guidelines for Video Display Terminals (https://www.cdc.gov/niosh/docs/97-117/)"
+     * "OSHA 29 CFR 1910.900: Ergonomics Program Standard (https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.900)"
+   - Do NOT use vague references like "OSHA guidelines say" - name the actual standard or publication
 
 D. FAQ SECTION:
    Require a 3-5 question FAQ section near the end targeting related long-tail queries 
    (e.g., "What's the best webcam for low-light home offices?", "How much should I spend on an ergonomic chair?").
 
+E. KEYWORD PLACEMENT:
+   - Primary keyword MUST appear in: Title (H1), Introduction (first paragraph), and at least one H2 heading
+   - No combining 5+ unrelated subtopics into one post - single clear primary keyword focus
+
 === EXCLUSIONS ===
 Do NOT generate: Conclusion section (separate template handles this), Related Articles, Images, 
 Image placeholders, Affiliate buttons, Product sections (handled by separate pipeline), 
-Call To Action, Schema, Internal links, External links, Author box (handled by above).
+Call To Action, Schema, Internal links, External links, Author bio section (removed per requirements).
 
 === FORMATTING ===
 - Clean semantic HTML5 only: <h2>, <h3>, <p>, <ul>, <ol>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>

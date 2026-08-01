@@ -444,34 +444,46 @@ class ContentGenerator:
         """
         Validate that generated HTML contains required monetization structure for equipment/product posts.
         Returns: (passed, details_dict)
+        
+        Requirements:
+        - Must have 5-7 specific named products with Amazon affiliate links, price ranges, and brief reasoning
+        - Must have recommendations comparison table covering all 5-7 products
+        - Must have real OSHA/NIOSH citations with actual URLs
+        - Must have FAQ section
+        - Every equipment/product mention must tie back to named products
         """
         from bs4 import BeautifulSoup
         import re
         
-        # Configuration
-        MIN_NAMED_PRODUCTS_THRESHOLD = 5  # Minimum named product mentions required for equipment posts
+        # Configuration: 5-7 named products required
+        MIN_NAMED_PRODUCTS_THRESHOLD = 5
+        MAX_NAMED_PRODUCTS_THRESHOLD = 7
         
-        # Determine if this is an equipment/product category
-        equipment_categories = [
+        # Equipment/product keywords - broader detection based on content, not just category
+        equipment_keywords = [
             "chair", "desk", "monitor", "keyboard", "mouse", "webcam", "headset",
             "microphone", "lighting", "ergonomic", "standing desk", "monitor arm",
-            "footrest", "laptop stand", "dock", "hub", "cable", "printer", "scanner"
+            "footrest", "laptop stand", "dock", "hub", "cable", "printer", "scanner",
+            "webcam", "microphone", "headset", "speaker", "router", "modem", "nas",
+            "hard drive", "ssd", "gpu", "cpu", "laptop", "tablet", "phone", "case",
+            "stand", "mount", "arm", "mat", "pad", "wrist rest", "foot rest"
         ]
         
-        is_equipment = any(cat in category.lower() for cat in equipment_categories) or \
-                       any(cat in topic.lower() for cat in equipment_categories)
+        # Check if content discusses equipment (not just category)
+        text_lower = (topic + " " + category).lower()
+        html_lower = html.lower()
+        content_discusses_equipment = any(kw in text_lower for kw in equipment_keywords) or \
+                                       any(kw in html_lower for kw in ["best ", "top ", "review", "buying guide", "vs ", "comparison"])
         
-        if not is_equipment:
-            return True, {"skipped": True, "reason": "Non-equipment category"}
+        if not content_discusses_equipment:
+            return True, {"skipped": True, "reason": "Content does not discuss equipment/products"}
         
         soup = BeautifulSoup(html, 'html.parser')
-        text = soup.get_text()
         
-        # 1. Count named product mentions - improved patterns that work with HTML tables and various formats
-        # Matches: "Product Name ($150–$200)", "Product Name — $150", "Product Name $150–$200", 
-        # "Product Name approx. $150", table cells with product names
+        # 1. Count named product mentions with price ranges and Amazon links
+        # Look for: "Product Name ($150–$200)" with affiliate link nearby
         product_patterns = [
-            # Pattern 1: "Product Name ($150–$200)" or "Product Name ($150-$200)" or "Product Name ($150)"
+            # Pattern 1: "Product Name ($150–$200)" with affiliate link
             r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*\(?\s*\$?\d+\s*[–\-]\s*\$?\d+\s*\)?',
             # Pattern 2: "Product Name — $150" or "Product Name - $150"
             r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*[—\-]\s*\$?\d+',
@@ -481,7 +493,7 @@ class ContentGenerator:
             r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+around\s+\$?\d+',
             # Pattern 5: "Product Name $150–$200" (no parentheses)
             r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+\$?\d+\s*[–\-]\s*\$?\d+',
-            # Pattern 6: Table cell with product name followed by price in next cell or same cell
+            # Pattern 6: Table cell with product name and price
             r'<td[^>]*>\s*[A-Z][a-zA-Z0-9\s\-\.]+?\s*</td>\s*<td[^>]*>\s*\$?\d+',
         ]
         
@@ -489,7 +501,6 @@ class ContentGenerator:
         for pattern in product_patterns:
             matches = re.findall(pattern, html)
             for m in matches:
-                # Clean up - remove price parts and trailing punctuation
                 clean = re.sub(r'\s*[\(—\-]\s*\$?\d+.*$', '', m).strip()
                 clean = re.sub(r'\s+\$?\d+\s*[–\-].*$', '', clean).strip()
                 clean = re.sub(r'^<td[^>]*>\s*|\s*</td>$', '', clean).strip()
@@ -499,62 +510,94 @@ class ContentGenerator:
         
         named_count = len(named_products)
         
-        # LOG THRESHOLD FOR DEBUGGING
-        logger.info(f"Monetization validation for '{topic}': named_count={named_count}, threshold={MIN_NAMED_PRODUCTS_THRESHOLD}, is_equipment={is_equipment}")
+        # 2. Check for recommendations comparison table (Budget/Mid-Range/Premium) covering 5-7 products
+        has_rec_table = bool(soup.find('table')) and \
+                        ('budget pick' in html_lower or 'mid-range pick' in html_lower or 'mid range pick' in html_lower or 'premium pick' in html_lower)
         
-        # 2. Check for recommendations table
-        has_rec_table = bool(soup.find('table')) and ('budget pick' in html.lower() or 'mid-range pick' in html.lower() or 'premium pick' in html.lower())
-        
-        # 3. Check for at least one real citation (not just acronym)
+        # 3. Check for at least one real OSHA/NIOSH citation with actual URL (not just acronym)
         has_real_citation = False
         citation_patterns = [
-            r'OSHA\s+Guidelines?',
-            r'CDC\s+Guidelines?',
-            r'NIOSH',
-            r'IEEE',
-            r'ANSI',
-            r'BIFMA',
-            r'https?://[^\s\)]+',
+            r'OSHA\s+Guidelines?\s*\(?https?://[^\s\)]+',
+            r'CDC\s+Guidelines?\s*\(?https?://[^\s\)]+',
+            r'NIOSH\s*\(?https?://[^\s\)]+',
+            r'https?://(www\.)?osha\.gov/[^\s\)]+',
+            r'https?://(www\.)?cdc\.gov/[^\s\)]+',
+            r'https?://(www\.)?niosh\.gov/[^\s\)]+',
         ]
         for pattern in citation_patterns:
             if re.search(pattern, html, re.IGNORECASE):
                 has_real_citation = True
                 break
         
-        # 4. Check for author bio block (more flexible pattern)
-        has_author_bio = bool(re.search(r'(Written by|Author|Consultant).*\d+[\+\s]*\s*years?', html, re.IGNORECASE))
-        
-        # 5. Check for geography scope labels
-        has_geo_labels = bool(re.search(r'(For\s+(US|United States|UK|Canada|EU|European)\s*(Based|Remote|Workers|Readers)?)', html, re.IGNORECASE))
-        
-        # 6. Check for FAQ section
+        # 4. Check for FAQ section
         has_faq = bool(soup.find('h2', string=re.compile(r'Frequently Asked Questions|FAQ', re.I)))
         
+        # 5. Check for Amazon affiliate links (rel="nofollow sponsored" or similar)
+        has_affiliate_links = bool(re.search(r'rel=["\']nofollow sponsored["\']|amazon\.com.*tag=', html, re.IGNORECASE))
+        
+        # 6. Check that named products have price ranges (at least 5 products)
+        products_with_prices = 0
+        for product in named_products:
+            # Check if this product name appears near a price
+            product_escaped = re.escape(product)
+            price_nearby = re.search(product_escaped + r'.{0,100}\$\d+', html)
+            if price_nearby:
+                products_with_prices += 1
+        
+        # 7. Check for comparison table with 5-7 product columns
+        comparison_table_cols = 0
+        table = soup.find('table')
+        if table:
+            thead = table.find('thead')
+            if thead:
+                th_elements = thead.find_all('th')
+                # Subtract 1 for the attribute label column
+                comparison_table_cols = max(0, len(th_elements) - 1)
+        
+        # LOG THRESHOLD FOR DEBUGGING
+        logger.info(f"Monetization validation for '{topic}': named_count={named_count}, with_prices={products_with_prices}, "
+                   f"threshold={MIN_NAMED_PRODUCTS_THRESHOLD}-{MAX_NAMED_PRODUCTS_THRESHOLD}, has_rec_table={has_rec_table}, "
+                   f"has_citation={has_real_citation}, has_faq={has_faq}, has_affiliate={has_affiliate_links}, "
+                   f"comparison_table_cols={comparison_table_cols}")
+        
+        # ALL conditions must pass
         passed = (
             named_count >= MIN_NAMED_PRODUCTS_THRESHOLD and
+            named_count <= MAX_NAMED_PRODUCTS_THRESHOLD and
+            products_with_prices >= MIN_NAMED_PRODUCTS_THRESHOLD and
             has_rec_table and
             has_real_citation and
-            has_author_bio and
-            has_faq
+            has_faq and
+            has_affiliate_links and
+            comparison_table_cols >= MIN_NAMED_PRODUCTS_THRESHOLD
         )
         
         details = {
             "passed": passed,
-            "is_equipment_category": is_equipment,
+            "content_discusses_equipment": content_discusses_equipment,
             "named_product_count": named_count,
             "named_products_found": list(named_products),
+            "products_with_price_ranges": products_with_prices,
             "has_recommendations_table": has_rec_table,
             "has_real_citation": has_real_citation,
-            "has_author_bio": has_author_bio,
-            "has_geography_labels": has_geo_labels,
             "has_faq_section": has_faq,
-            "threshold": MIN_NAMED_PRODUCTS_THRESHOLD,
+            "has_affiliate_links": has_affiliate_links,
+            "comparison_table_columns": comparison_table_cols,
+            "threshold_min": MIN_NAMED_PRODUCTS_THRESHOLD,
+            "threshold_max": MAX_NAMED_PRODUCTS_THRESHOLD,
         }
         
         if not passed:
-            logger.warning(f"Monetization validation FAILED for '{topic}': named_count={named_count} < threshold={MIN_NAMED_PRODUCTS_THRESHOLD}, details={details}")
+            logger.warning(f"Monetization validation FAILED for '{topic}': "
+                          f"named_count={named_count} (need {MIN_NAMED_PRODUCTS_THRESHOLD}-{MAX_NAMED_PRODUCTS_THRESHOLD}), "
+                          f"products_with_prices={products_with_prices} (need >={MIN_NAMED_PRODUCTS_THRESHOLD}), "
+                          f"rec_table={has_rec_table}, citation={has_real_citation}, "
+                          f"faq={has_faq}, affiliate={has_affiliate_links}, "
+                          f"comparison_cols={comparison_table_cols} (need >={MIN_NAMED_PRODUCTS_THRESHOLD})")
         else:
-            logger.info(f"Monetization validation PASSED for '{topic}': named_count={named_count} >= threshold={MIN_NAMED_PRODUCTS_THRESHOLD}")
+            logger.info(f"Monetization validation PASSED for '{topic}': "
+                       f"{named_count} named products, {products_with_prices} with prices, "
+                       f"{comparison_table_cols} comparison table columns")
         
         return passed, details
 
@@ -582,50 +625,77 @@ class ContentGenerator:
         section_text = re.sub(r'\s+', ' ', section_text)
         return section_text
 
-    @get_retry_decorator()
     def generate_image_via_hf(self, prompt: str) -> bytes:
-        """Call HF InferenceClient (fal-ai provider) for FLUX.1-schnell. Returns image bytes."""
+        """Call HF InferenceClient for FLUX.1-schnell. Returns image bytes.
+        
+        Tries multiple providers in order of reliability. Surfaces real HTTP status 
+        and error message from provider on failure.
+        """
         if InferenceClient is None:
             raise RuntimeError("huggingface_hub package not installed. Install with: pip install huggingface_hub")
         
-        client = InferenceClient(provider=settings.HF_IMAGE_PROVIDER, api_key=settings.HF_API_TOKEN)
+        providers_to_try = [
+            ("fal-ai", "black-forest-labs/FLUX.1-schnell"),
+            ("replicate", "black-forest-labs/FLUX.1-schnell"),
+            ("together", "black-forest-labs/FLUX.1-schnell"),
+            ("hyperbolic", "black-forest-labs/FLUX.1-schnell"),
+            ("nebius", "black-forest-labs/FLUX.1-schnell"),
+        ]
         
-        try:
-            # InferenceClient.text_to_image returns a PIL Image
-            image = client.text_to_image(
-                prompt,
-                model="black-forest-labs/FLUX.1-schnell",
-                num_inference_steps=4,
-            )
-            
-            # Convert PIL Image to bytes
-            img_byte_arr = io.BytesIO()
-            image.save(img_byte_arr, format='PNG')
-            return img_byte_arr.getvalue()
-            
-        except InferenceTimeoutError as e:
-            logger.warning(f"HF Inference timeout: {e}. Retrying...")
-            raise Exception("Inference timeout - retry")
-        except HfHubHTTPError as e:
-            # Log full error details for debugging
-            status = e.response.status_code if e.response is not None else "N/A"
-            response_text = e.response.text if e.response is not None else "N/A"
-            logger.error(f"HF Inference HTTP error: status={status}, response={response_text}, prompt={prompt[:100]}...")
-            if e.response is not None and e.response.status_code == 503:
-                # Cold start - try to get estimated_time from response
-                try:
-                    data = e.response.json()
-                    wait_time = data.get("estimated_time", 20)
-                    logger.info(f"HF model loading, waiting {wait_time}s")
-                    time.sleep(wait_time)
-                    raise Exception("Model loading - retry")
-                except:
-                    time.sleep(20)
-                    raise Exception("Model loading - retry")
-            raise
-        except Exception as e:
-            logger.error(f"HF Inference error: {type(e).__name__}: {e}")
-            raise
+        last_error = None
+        for provider, model in providers_to_try:
+            client = InferenceClient(provider=provider, api_key=settings.HF_API_TOKEN)
+            try:
+                logger.info(f"Attempting image generation with provider={provider}, model={model}")
+                image = client.text_to_image(
+                    prompt,
+                    model=model,
+                    num_inference_steps=4,
+                )
+                
+                img_byte_arr = io.BytesIO()
+                image.save(img_byte_arr, format='PNG')
+                logger.info(f"Image generation succeeded with provider={provider}")
+                return img_byte_arr.getvalue()
+                
+            except InferenceTimeoutError as e:
+                logger.warning(f"HF Inference timeout with {provider}: {e}")
+                last_error = e
+                continue
+            except HfHubHTTPError as e:
+                status = e.response.status_code if e.response is not None else "N/A"
+                response_text = e.response.text if e.response is not None else "N/A"
+                logger.error(f"HF Inference HTTP error with {provider}: status={status}, response={response_text}")
+                
+                if status == 403:
+                    logger.warning(f"Provider {provider} returned 403 (likely gated model or permission issue), trying next provider")
+                    last_error = e
+                    continue
+                elif status == 404:
+                    logger.warning(f"Provider {provider} returned 404 (model not available), trying next provider")
+                    last_error = e
+                    continue
+                elif status == 503:
+                    try:
+                        data = e.response.json()
+                        wait_time = data.get("estimated_time", 20)
+                        logger.info(f"Model loading on {provider}, waiting {wait_time}s")
+                        time.sleep(wait_time)
+                        continue
+                    except:
+                        time.sleep(20)
+                        continue
+                else:
+                    last_error = e
+                    continue
+            except Exception as e:
+                logger.error(f"HF Inference error with {provider}: {type(e).__name__}: {e}")
+                last_error = e
+                continue
+        
+        raise RuntimeError(
+            f"All image generation providers failed. Last error: {type(last_error).__name__}: {last_error}"
+        )
 
 
     def generate_image_prompt_plan(self, article_html: str, topic: str, keyword: str, category: str) -> str:
@@ -897,7 +967,7 @@ class ContentGenerator:
         
         # 6. Conclusion
         conc_prompt = build_context(qs=qs_raw) + CONCLUSION_TEMPLATE.format(topic=topic)
-        conc_html = self.generate_section(conc_prompt, model='gpt-4o-mini')
+conc_html = self.generate_section(conc_prompt, model='gpt-4o-mini')
         
         # 7. Footer
         footer_html = "\n<footer style='font-size: 0.9em; color: #666; border-top: 1px solid #eee; padding-top: 30px; margin-top: 60px;'><em>Disclaimer: This article contains affiliate links. If you click a link and make a purchase, we may earn a small commission at no extra cost to you.</em></footer>\n"
@@ -915,37 +985,26 @@ class ContentGenerator:
             footer_html,
             '</div>'
         ]
-
+        
         combined_html = "\n".join(parts)
         
         # Apply de-templating to vary prose across product sections
         combined_html = detemplate_article(combined_html)
         
-        # Generate author byline and research methodology
-        author_signals = generate_author_signals(
-            author=DEFAULT_AUTHOR,
-            methodology=DEFAULT_METHODOLOGY,
-            include_top_byline=True,
-            include_bottom_byline=False,
-            include_methodology=True
-        )
-        
-        # Insert author byline after intro
+        # Insert methodology section before FAQ (no author bio per requirements)
         soup = BeautifulSoup(combined_html, 'html.parser')
-        intro_section = soup.find('div', class_='blog-container')
-        if intro_section:
-            # Find the intro content (first few paragraphs after style)
-            first_h2 = soup.find('h2')
-            if first_h2:
-                # Insert top byline before first H2
-                byline_soup = BeautifulSoup(author_signals['top_byline'], 'html.parser')
-                first_h2.insert_before(byline_soup)
-        
-        # Insert methodology section before FAQ
         faq_section = soup.find('h2', string=re.compile(r'Frequently Asked Questions', re.I))
-        if faq_section and author_signals['methodology']:
-            methodology_soup = BeautifulSoup(author_signals['methodology'], 'html.parser')
-            faq_section.insert_before(methodology_soup)
+        if faq_section:
+            methodology_signals = generate_author_signals(
+                author=DEFAULT_AUTHOR,
+                methodology=DEFAULT_METHODOLOGY,
+                include_top_byline=False,
+                include_bottom_byline=False,
+                include_methodology=True
+            )
+            if methodology_signals['methodology']:
+                methodology_soup = BeautifulSoup(methodology_signals['methodology'], 'html.parser')
+                faq_section.insert_before(methodology_soup)
         
         # Generate Product/Review schema JSON-LD
         schema_html = self.schema_generator.generate_inline_json_ld(products, topic, keyword)

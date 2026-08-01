@@ -109,22 +109,22 @@ def process_row(
     related_posts = link_manager.get_related_articles(topic, seo_labels, count=3)
     if related_posts:
         html_content = link_manager.inject_internal_links(html_content, related_posts)
-        html_content = link_manager.add_related_section(html_content, related_posts)
+        html_content = link_manager.add_related_section(html_content, related_posts, category)
         
     # 6. Clean H1 tags before publishing
     h1_remover = BloggerH1Remover(dry_run=False)
     cleaned_content, _ = h1_remover.clean_post_h1(topic.strip(), html_content)
     
-    # 7. Publish to Blogger
+    # 7. Publish to Blogger as draft first
     clean_title = topic.strip()
-    published_url, current_post_id = publisher.publish_post(clean_title, cleaned_content, labels=seo_labels)
+    published_url, current_post_id = publisher.publish_post_as_draft(clean_title, cleaned_content, labels=seo_labels)
     
-    # 8. Update Google Sheets
-    sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id, product_count=len(products_data))
-    sheets.update_dashboard_stats("Success")
-    sheets.log_execution(topic, "Success", url=published_url, product_count=len(products_data))
+    # 8. Update Google Sheets with draft status
+    sheets.update_row_status(row_index, "Draft", url=published_url, post_id=current_post_id, product_count=len(products_data))
+    sheets.update_dashboard_stats("Draft")
+    sheets.log_execution(topic, "Draft", url=published_url, product_count=len(products_data))
     
-    logger.info(f"--- SUCCESS FOR ROW {row_index}: {topic} ---")
+    logger.info(f"--- DRAFT PUBLISHED FOR ROW {row_index}: {topic} ---")
     return True
 
 
