@@ -917,7 +917,8 @@ class ContentGenerator:
             r_prompt = build_context(qs=qs_raw) + REVIEW_TEMPLATE.format(
                 title=p['title'], price=p['price'], 
                 rating=p['rating'], review_count=p['review_count'], 
-                features=p['features']
+                features=p['features'],
+                url=p.get('url', '#')
             )
             
             review_content = self.generate_section(r_prompt, model="deepseek-v4-flash")
