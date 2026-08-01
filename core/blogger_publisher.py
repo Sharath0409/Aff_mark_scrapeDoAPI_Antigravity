@@ -9,19 +9,20 @@ logger = get_logger(__name__)
 
 
 def insert_jump_break(html: str) -> str:
-    """Insert Blogger jump break (<!--more-->) into HTML content.
+    """Insert Blogger jump break (<!--more-->) after the first meaningful paragraph.
     
+    Standardized jump break function used consistently across all publishing paths.
     Rules:
     1. If <!--more--> already exists, return unchanged
-    2. Find first <h2> and insert before it
-    3. If no H2, insert after second </p>
-    4. If fewer than 2 paragraphs, insert before </body> or at end
+    2. Find first <p> with meaningful content (>50 chars) and insert after it
+    3. If no substantial paragraph, insert before first <h2>
+    4. If no H2, append at end
     
     Args:
         html: HTML content string
         
     Returns:
-        HTML with jump break inserted
+        HTML with jump break inserted after first meaningful paragraph
     """
     if not html:
         return html
@@ -32,28 +33,22 @@ def insert_jump_break(html: str) -> str:
     
     soup = BeautifulSoup(html, 'html.parser')
     
-    # Rule 2: Find first H2
+    # Rule 1: Find first <p> tag with meaningful content
+    paragraphs = soup.find_all('p')
+    for p in paragraphs:
+        text = p.get_text(strip=True)
+        if len(text) > 50:  # Meaningful paragraph threshold
+            p.insert_after(Comment('more'))
+            return str(soup)
+    
+    # Rule 2: Fallback - insert before first H2
     first_h2 = soup.find('h2')
     if first_h2:
         first_h2.insert_before(Comment('more'))
         return str(soup)
     
-    # Rule 3: Find paragraphs and insert after second </p>
-    paragraphs = soup.find_all('p')
-    if len(paragraphs) >= 2:
-        # Insert after the second paragraph
-        second_p = paragraphs[1]
-        second_p.insert_after(Comment('more'))
-        return str(soup)
-    
-    # Rule 4: Fewer than 2 paragraphs - insert before </body> or at end
-    body = soup.find('body')
-    if body:
-        body.append(Comment('more'))
-    else:
-        # No body tag, append at end
-        soup.append(Comment('more'))
-    
+    # Rule 3: Last resort - append at end
+    soup.append(Comment('more'))
     return str(soup)
 
 
@@ -119,7 +114,7 @@ class BloggerPublisher:
         if labels is None:
             labels = []
             
-        # Insert jump break before publishing
+        # Insert jump break before publishing (consistent logic)
         content = insert_jump_break(content)
         
         # Validate content before publishing
@@ -153,7 +148,7 @@ class BloggerPublisher:
     @get_retry_decorator()
     def update_post(self, post_id, post_body):
         """Update an existing post."""
-        # Insert jump break if content is being updated
+        # Insert jump break if content is being updated (consistent logic)
         if 'content' in post_body:
             post_body['content'] = insert_jump_break(post_body['content'])
             # Validate content if present
@@ -162,8 +157,8 @@ class BloggerPublisher:
         return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post_body).execute()
 
     @get_retry_decorator()
-    def list_all_posts(self, max_results=500):
-        """Retrieve existing posts for internal link matching."""
+    def list_all_posts(self, max_results=500, fetch_bodies=False):
+        """Retrieve existing posts for internal link matching or audit."""
         logger.info(f"Listing up to {max_results} existing posts...")
         posts_list = []
         page_token = None
@@ -173,7 +168,7 @@ class BloggerPublisher:
                 blogId=self.blog_id,
                 pageToken=page_token,
                 maxResults=min(max_results - len(posts_list), 500),
-                fetchBodies=False # Only need metadata
+                fetchBodies=fetch_bodies
             )
             response = request.execute()
             

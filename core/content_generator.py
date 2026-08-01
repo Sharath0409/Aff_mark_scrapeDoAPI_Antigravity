@@ -984,6 +984,10 @@ class ContentGenerator:
         # Add schema at the end
         final_html = str(soup) + "\n" + schema_html
         
+        # Insert jump break after first meaningful paragraph for consistent preview
+        from core.blogger_publisher import insert_jump_break_after_first_paragraph
+        final_html = insert_jump_break_after_first_paragraph(final_html)
+        
         return self._apply_quality_corrections(final_html, topic, keyword)
 
     def generate_informational_blueprint(self, topic: str, keyword: str, category: str) -> str:
@@ -1011,6 +1015,11 @@ class ContentGenerator:
             article_html = article_html.split("```html")[1].split("```")[0].strip()
         elif article_html.startswith("```"):
             article_html = article_html.split("```")[1].split("```")[0].strip()
+        
+        # Insert jump break after first meaningful paragraph for consistent preview
+        from core.blogger_publisher import insert_jump_break_after_first_paragraph
+        article_html = insert_jump_break_after_first_paragraph(article_html)
+        
         return sanitize_html(article_html)
 
     def generate_seo_tags(self, topic: str, keyword: str) -> list:

@@ -10,3 +10,4 @@ google-cloud-storage
 tabulate
 pytest
 pytest-mock
+markdown
