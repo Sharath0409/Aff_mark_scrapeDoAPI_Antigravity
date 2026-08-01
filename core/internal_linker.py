@@ -351,7 +351,7 @@ class InternalLinkManager:
 
         return html_with_links
 
-def _generate_split_related_section(self, related_info: List[Dict], commercial_guides: List[Dict]) -> str:
+    def _generate_split_related_section(self, related_info: List[Dict], commercial_guides: List[Dict]) -> str:
         """Generate HTML block containing split list of related guides and recommendations."""
         info_links = "".join([f'<li><a href="{a["url"]}">{a["title"]}</a></li>' for a in related_info])
         comm_links = "".join([

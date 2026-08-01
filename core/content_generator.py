@@ -366,6 +366,9 @@ class ContentGenerator:
             logger.warning(f"CLIP Inference timeout: {e}. Retrying...")
             raise Exception("Inference timeout - retry")
         except HfHubHTTPError as e:
+            status = e.response.status_code if e.response is not None else "N/A"
+            response_text = e.response.text if e.response is not None else "N/A"
+            logger.error(f"CLIP Inference HTTP error: status={status}, response={response_text}, model={CLIP_MODEL_NAME}, provider=hf-inference")
             if e.response is not None and e.response.status_code == 503:
                 # Cold start
                 try:
@@ -377,7 +380,6 @@ class ContentGenerator:
                 except:
                     time.sleep(20)
                     raise Exception("Model loading - retry")
-            logger.error(f"CLIP Inference HTTP error: {e}")
             raise
 
 
@@ -465,14 +467,22 @@ class ContentGenerator:
         soup = BeautifulSoup(html, 'html.parser')
         text = soup.get_text()
         
-        # 1. Count named product mentions (patterns: "Product Name ($XX–$XX)" or "Product Name — $XX")
-        # More flexible patterns that work with HTML and various formats
+        # 1. Count named product mentions - improved patterns that work with HTML tables and various formats
+        # Matches: "Product Name ($150–$200)", "Product Name — $150", "Product Name $150–$200", 
+        # "Product Name approx. $150", table cells with product names
         product_patterns = [
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*\(?\s*\$?\d+\s*[–\-]\s*\$?\d+\s*\)?',  # "Product Name ($150–$200)"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*[—\-]\s*\$?\d+',                      # "Product Name — $150"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+approx\.\s*\$?\d+',                   # "Product Name approx. $150"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+around\s+\$?\d+',                     # "Product Name around $150"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+\$?\d+\s*[–\-]\s*\$?\d+',            # "Product Name $150–$200"
+            # Pattern 1: "Product Name ($150–$200)" or "Product Name ($150-$200)" or "Product Name ($150)"
+            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*\(?\s*\$?\d+\s*[–\-]\s*\$?\d+\s*\)?',
+            # Pattern 2: "Product Name — $150" or "Product Name - $150"
+            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*[—\-]\s*\$?\d+',
+            # Pattern 3: "Product Name approx. $150"
+            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+approx\.\s*\$?\d+',
+            # Pattern 4: "Product Name around $150"
+            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+around\s+\$?\d+',
+            # Pattern 5: "Product Name $150–$200" (no parentheses)
+            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+\$?\d+\s*[–\-]\s*\$?\d+',
+            # Pattern 6: Table cell with product name followed by price in next cell or same cell
+            r'<td[^>]*>\s*[A-Z][a-zA-Z0-9\s\-\.]+?\s*</td>\s*<td[^>]*>\s*\$?\d+',
         ]
         
         named_products = set()
@@ -482,11 +492,15 @@ class ContentGenerator:
                 # Clean up - remove price parts and trailing punctuation
                 clean = re.sub(r'\s*[\(—\-]\s*\$?\d+.*$', '', m).strip()
                 clean = re.sub(r'\s+\$?\d+\s*[–\-].*$', '', clean).strip()
+                clean = re.sub(r'^<td[^>]*>\s*|\s*</td>$', '', clean).strip()
                 clean = clean.strip('.,;:')
                 if len(clean) > 3:
                     named_products.add(clean)
         
         named_count = len(named_products)
+        
+        # LOG THRESHOLD FOR DEBUGGING
+        logger.info(f"Monetization validation for '{topic}': named_count={named_count}, threshold={MIN_NAMED_PRODUCTS_THRESHOLD}, is_equipment={is_equipment}")
         
         # 2. Check for recommendations table
         has_rec_table = bool(soup.find('table')) and ('budget pick' in html.lower() or 'mid-range pick' in html.lower() or 'premium pick' in html.lower())
@@ -534,13 +548,13 @@ class ContentGenerator:
             "has_author_bio": has_author_bio,
             "has_geography_labels": has_geo_labels,
             "has_faq_section": has_faq,
-            "threshold": 5,
+            "threshold": MIN_NAMED_PRODUCTS_THRESHOLD,
         }
         
         if not passed:
-            logger.warning(f"Monetization validation FAILED for '{topic}': {details}")
+            logger.warning(f"Monetization validation FAILED for '{topic}': named_count={named_count} < threshold={MIN_NAMED_PRODUCTS_THRESHOLD}, details={details}")
         else:
-            logger.info(f"Monetization validation PASSED for '{topic}': {named_count} named products")
+            logger.info(f"Monetization validation PASSED for '{topic}': named_count={named_count} >= threshold={MIN_NAMED_PRODUCTS_THRESHOLD}")
         
         return passed, details
 
@@ -593,6 +607,10 @@ class ContentGenerator:
             logger.warning(f"HF Inference timeout: {e}. Retrying...")
             raise Exception("Inference timeout - retry")
         except HfHubHTTPError as e:
+            # Log full error details for debugging
+            status = e.response.status_code if e.response is not None else "N/A"
+            response_text = e.response.text if e.response is not None else "N/A"
+            logger.error(f"HF Inference HTTP error: status={status}, response={response_text}, prompt={prompt[:100]}...")
             if e.response is not None and e.response.status_code == 503:
                 # Cold start - try to get estimated_time from response
                 try:
@@ -604,10 +622,9 @@ class ContentGenerator:
                 except:
                     time.sleep(20)
                     raise Exception("Model loading - retry")
-            logger.error(f"HF Inference HTTP error: {e}")
             raise
         except Exception as e:
-            logger.error(f"HF Inference error: {e}")
+            logger.error(f"HF Inference error: {type(e).__name__}: {e}")
             raise
 
 
