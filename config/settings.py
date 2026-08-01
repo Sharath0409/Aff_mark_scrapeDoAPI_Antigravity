@@ -19,10 +19,18 @@ GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
+# HF Inference provider configuration
+# fal-ai provider confirmed working for FLUX.1-schnell as of mid-July 2026
+HF_IMAGE_PROVIDER = os.getenv("HF_IMAGE_PROVIDER", "fal-ai")
+# CLIP embeddings - use hf-inference for text embeddings
+# Image embeddings fall back to text prompt as proxy (no provider supports multimodal feature-extraction)
+HF_CLIP_PROVIDER = os.getenv("HF_CLIP_PROVIDER", "hf-inference")
+
 # CLIP Configuration for image-text relevance verification
 # PLACEHOLDER THRESHOLD - REQUIRES CALIBRATION AGAINST REAL OUTPUT BEFORE PRODUCTION USE
 CLIP_SIMILARITY_THRESHOLD = float(os.getenv("CLIP_SIMILARITY_THRESHOLD", "0.25"))
-CLIP_MODEL_NAME = os.getenv("CLIP_MODEL_NAME", "openai/clip-vit-base-patch32")
+# Use BGE model which supports feature-extraction on hf-inference
+CLIP_MODEL_NAME = os.getenv("CLIP_MODEL_NAME", "BAAI/bge-small-en-v1.5")
 
 # Validation
 REQUIRED_SETTINGS = [

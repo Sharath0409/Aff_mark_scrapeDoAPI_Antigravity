@@ -372,23 +372,69 @@ Here is the planning blueprint for this article:
 
 Your task is to write a comprehensive, long-form informational article based on the provided topic, keyword, category, and blueprint. The blueprint is your single source of truth for the outline, target audience, pain points, tables, and checklists.
 
-Requirements:
+=== PRE-GENERATION CONSTRAINTS ===
+SINGLE KEYWORD FOCUS: This article MUST target EXACTLY ONE primary topic: "{topic}" with keyword "{keyword}". 
+- If the blueprint suggests multiple unrelated subtopics (e.g., ergonomics + tax law + career advice), DO NOT write them all into one article.
+- Instead, output an OUTLINE suggesting a CONTENT SERIES of 3-4 separate article titles, each with a clear single focus.
+- Every section must support the single primary topic. No cross-category leakage.
+
+=== CONTENT REQUIREMENTS ===
 1. Target Audience: US remote workers, hybrid employees, programmers, and desk professionals.
-2. Length: 3000 to 5000 words. Write highly detailed, exhaustive sections to meet this requirement. Every H2 and H3 section from the blueprint's outline must be fully developed with complete paragraphs and rich, practical information. Do not cut corners or summarize.
-3. Style and Tone: Professional, editorial, authoritative, helpful, and natural (Wirecutter/New York Times style). Avoid robotic transitions, repetitive sentence structures, and generic AI filler. Do not include any AI disclaimers or introductory meta-commentary.
-4. Content Quality: Focus on E-E-A-T and helpful content principles. Avoid fake statistics, fictional experts, fabricated case studies, or emojis. Use OSHA guidance accurately and only when relevant.
-5. Exclusions: Do NOT generate a Conclusion section, FAQ section, Related Articles, Images, Image placeholders, Affiliate buttons, Product sections, Call To Action, Schema, Internal links, External links, or Author box.
+2. Length: 3000 to 5000 words. Write highly detailed, exhaustive sections.
+3. Style and Tone: Professional, editorial, authoritative, helpful, natural (Wirecutter/NYT style).
+4. Content Quality: E-E-A-T compliant. Avoid fake statistics, fictional experts, emojis. Use OSHA guidance accurately.
+5. GEOGRAPHY SCOPE GUARD: If any section applies only to a specific region (e.g., US tax law, US-specific regulations), 
+   the heading MUST explicitly state the scope (e.g., "For US-Based Remote Workers: Tax Considerations"). 
+   Do NOT present region-specific advice as universal.
 
-IMPORTANT - Image Placement Markers:
-As you write the article, insert image placement markers at natural points where an explanatory image would genuinely improve reader understanding (e.g., after a complex concept explanation, after a step-by-step process section, after a comparison discussion). Use the format [IMG-1], [IMG-2], [IMG-3], etc., in ascending order of appearance. Aim for 4-8 markers total across the article. Do NOT write any image descriptions or prompts — only insert the marker tokens.
+=== MONETIZATION STRUCTURE (REQUIRED FOR EQUIPMENT/PRODUCT TOPICS) ===
+If the article discusses equipment, tools, products, or purchasable items:
 
-Evergreen Requirement:
-All content must be evergreen. Do NOT include calendar years (2024, 2025, etc.) in titles, headings, metadata, body content, or anywhere unless the year is an objective factual requirement (e.g., OSHA updated guidance in 2024, product released in 2025, Windows 11 24H2). No marketing-style years.
+A. NAMED PRODUCTS REQUIRED:
+   - Every generic product category mentioned (e.g., "a quality webcam", "an ergonomic chair") 
+     MUST be replaced with 2-3 SPECIFIC, REAL, CURRENTLY-SOLD product names.
+   - Each named product MUST include:
+     * One-sentence "why this one" justification
+     * Approximate price range (e.g., "$150–$200")
+   - Do NOT invent fictional products. Use well-known real products currently sold in the US.
 
-Formatting Requirements:
-1. Format the article using clean, semantic HTML5 tags ONLY.
-2. Use only the following HTML tags: <h2>, <h3>, <p>, <ul>, <ol>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>.
-3. Do NOT include <html>, <head>, <body>, CSS, JavaScript, inline styles, or Markdown. Output raw HTML directly.
+B. RECOMMENDATIONS TABLE:
+   For each major equipment section, generate a markdown table with columns:
+   | Budget Pick | Mid-Range Pick | Premium Pick |
+   |-------------|----------------|--------------|
+   | Real Product Name ($XX–$XX) | Real Product Name ($XX–$XX) | Real Product Name ($XX–$XX) |
+   Populate each cell with a real named product appropriate to the category.
+
+C. AUTHOR/CITATION SIGNALS:
+   - Include at least ONE linked citation to a REAL NAMED authoritative source 
+     (e.g., "OSHA Guidelines on Computer Workstations (https://www.osha.gov/ergonomics)" 
+     not just "OSHA guidelines").
+   - Generate a short AUTHOR BIO BLOCK (2-3 sentences, consistent persona) appended at the end:
+     "Written by [Name], a workplace productivity consultant with 10+ years advising US remote teams 
+     on ergonomic setups and home office optimization. [Name] has contributed to [Real Publication] 
+     and specializes in evidence-based workspace design."
+
+D. FAQ SECTION:
+   Require a 3-5 question FAQ section near the end targeting related long-tail queries 
+   (e.g., "What's the best webcam for low-light home offices?", "How much should I spend on an ergonomic chair?").
+
+=== EXCLUSIONS ===
+Do NOT generate: Conclusion section (separate template handles this), Related Articles, Images, 
+Image placeholders, Affiliate buttons, Product sections (handled by separate pipeline), 
+Call To Action, Schema, Internal links, External links, Author box (handled by above).
+
+=== FORMATTING ===
+- Clean semantic HTML5 only: <h2>, <h3>, <p>, <ul>, <ol>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>, <em>
+- NO <html>, <head>, <body>, CSS, JavaScript, inline styles, or Markdown
+- Image placement markers: [IMG-1], [IMG-2], etc. at natural points (4-8 total)
+
+=== EVERGREEN REQUIREMENT ===
+No calendar years unless objective factual requirement (e.g., "OSHA updated guidance in 2024").
+
+=== VALIDATION ===
+Before returning: 1) Topic consistency 100%, 2) Named products present when equipment discussed, 
+3) Recommendations table present for equipment sections, 4) Citations to real named sources, 
+4) Author bio appended, 5) Geography scope labeled, 5) FAQ section present, 6) Evergreen.
 """
 
 

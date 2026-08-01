@@ -162,6 +162,135 @@ class InternalLinkManager:
             else:
                 return html_content + section_html
 
+    # Configuration for commercial guide linking
+    COMMERCIAL_RELEVANCE_THRESHOLD = getattr(settings, "CLIP_SIMILARITY_THRESHOLD", 0.25)
+    MAX_COMMERCIAL_LINKS = 5
+    MIN_COMMERCIAL_LINKS = 2
+
+    def is_same_article(self, item, topic: str) -> bool:
+        """Check if an article is the same as the current topic."""
+        clean_item = re.sub(r'[^a-z0-9]', '', item['title'].lower())
+        clean_topic = re.sub(r'[^a-z0-9]', '', topic.lower())
+        return clean_item == clean_topic
+
+    def is_commercial(self, item) -> bool:
+        """Heuristic for commercial vs informational classification."""
+        title_lower = item['title'].lower()
+        commercial_keywords = [
+            "best", "review", "vs", "top", "under", "buying guide", 
+            "deals", "cheap", "comparison", "purchase", "shopping",
+            "gear", "gadgets", "product", "affordable", "price", "buyer"
+        ]
+        if any(kw in title_lower for kw in commercial_keywords):
+            return True
+        commercial_labels = ["review", "reviews", "product", "products", "buying-guide", "comparison"]
+        if any(l.lower() in commercial_labels for l in item.get('labels', [])):
+            return True
+        return False
+
+    def get_commercial_embeddings(self, texts: list) -> list:
+        """Get embeddings for commercial post titles + summaries using existing CLIP pipeline."""
+        from core.content_generator import ContentGenerator
+        generator = ContentGenerator()
+        embeddings = []
+        for text in texts:
+            emb = generator.get_clip_embeddings(text=text)
+            embeddings.append(emb)
+        return embeddings
+
+    def find_related_commercial_guides(self, html_content: str, topic: str, category: str, 
+                                        current_article_title: str) -> list:
+        """
+        Find relevant commercial product guides using CLIP embeddings.
+        Returns list of dicts with: title, url, relevance_score, anchor_text_suggestion
+        """
+        if not self.corpus:
+            self.refresh_corpus()
+        
+        # Filter to commercial posts only
+        commercial_posts = [
+            item for item in self.corpus 
+            if self.is_commercial(item) and not self.is_same_article(item, current_article_title)
+        ]
+        
+        if not commercial_posts:
+            logger.info("No commercial posts in corpus")
+            return []
+        
+        # Prepare texts for embedding: title + first 200 chars of summary
+        commercial_texts = [
+            f"{p['title']}. {p.get('summary', '')[:200]}" 
+            for p in commercial_posts
+        ]
+        
+        # Get embeddings for commercial posts
+        try:
+            commercial_embeddings = self.get_commercial_embeddings(commercial_texts)
+        except Exception as e:
+            logger.error(f"Failed to get commercial embeddings: {e}")
+            return []
+        
+        # Get query embedding (current article topic + category)
+        from core.content_generator import ContentGenerator
+        generator = ContentGenerator()
+        query_text = f"{topic} {category}"
+        query_embedding = generator.get_clip_embeddings(text=query_text)
+        
+        # Compute similarities
+        scored_posts = []
+        for i, (post, emb) in enumerate(zip(commercial_posts, commercial_embeddings)):
+            sim = generator.cosine_similarity(query_embedding, emb)
+            
+            # Log every decision
+            logger.info(f"COMMERCIAL LINK SCORE: '{post['title']}' -> {sim:.4f} "
+                        f"(threshold: {self.COMMERCIAL_RELEVANCE_THRESHOLD})")
+            
+            if sim >= self.COMMERCIAL_RELEVANCE_THRESHOLD:
+                scored_posts.append({
+                    "title": post['title'],
+                    "url": post['url'],
+                    "relevance_score": sim,
+                    "post_id": post['id']
+                })
+            else:
+                logger.debug(f"REJECTED commercial link: '{post['title']}' ({sim:.4f})")
+        
+        # Sort by relevance descending, take top 5
+        scored_posts.sort(key=lambda x: x['relevance_score'], reverse=True)
+        selected = scored_posts[:self.MAX_COMMERCIAL_LINKS]
+        
+        if len(selected) < self.MIN_COMMERCIAL_LINKS:
+            logger.info(f"Only {len(selected)} commercial guides cleared threshold ({self.COMMERCIAL_RELEVANCE_THRESHOLD}), skipping section")
+            return []
+        
+        logger.info(f"Selected {len(selected)} commercial guides for 'Related Product Guides' section")
+        return selected
+
+    def _generate_commercial_guides_section(self, commercial_guides: list) -> str:
+        """Generate HTML for 'Related Product Guides' section."""
+        if not commercial_guides:
+            return ""
+        
+        links_html = "".join([
+            f'<li><a href="{g["url"]}">{g["title"]}</a> '
+            f'<span class="relevance-badge" style="font-size:0.8em;color:#666;"> '
+            f'(relevance: {g["relevance_score"]:.2f})</span></li>'
+            for g in commercial_guides
+        ])
+        
+        return f"""
+        <div class="related-product-guides" style="margin-top: 50px; border-top: 2px solid #eee; padding-top: 30px; margin-bottom: 30px;">
+            <h2 style="text-align: left; margin-bottom: 20px; font-size: 1.5em;">Related Product Guides</h2>
+            <p style="color: #666; margin-bottom: 20px; font-size: 0.95em;">
+                Based on this guide's topic, we've selected these product reviews and buying guides 
+                that may help you complete your setup:
+            </p>
+            <ul style="list-style-type: disc; padding-left: 20px; line-height: 2.0;">
+                {links_html}
+            </ul>
+        </div>
+        """
+
     def link_informational_article(self, html_content: str, topic: str, category: str) -> str:
         """Link an informational article to both related informational and commercial articles.
 
@@ -178,57 +307,26 @@ class InternalLinkManager:
             logger.warning("No corpus available. Returning unmodified HTML.")
             return html_content
 
-        # Helper to filter out the current article
-        def is_same_article(item):
-            clean_item = re.sub(r'[^a-z0-9]', '', item['title'].lower())
-            clean_topic = re.sub(r'[^a-z0-9]', '', topic.lower())
-            return clean_item == clean_topic
-
-        # Heuristic for commercial vs informational classification
-        def is_commercial(item):
-            title_lower = item['title'].lower()
-            commercial_keywords = [
-                "best", "review", "vs", "top", "under", "buying guide", 
-                "deals", "cheap", "comparison", "purchase", "shopping",
-                "gear", "gadgets", "product", "affordable", "price", "buyer"
-            ]
-            if any(kw in title_lower for kw in commercial_keywords):
-                return True
-            commercial_labels = ["review", "reviews", "product", "products", "buying-guide", "comparison"]
-            if any(l.lower() in commercial_labels for l in item.get('labels', [])):
-                return True
-            return False
-
-        # Filter corpus
-        filtered_corpus = [item for item in self.corpus if not is_same_article(item)]
-
-        informational_corpus = [item for item in filtered_corpus if not is_commercial(item)]
-        commercial_corpus = [item for item in filtered_corpus if is_commercial(item)]
-
-        logger.info(f"Classified corpus: {len(informational_corpus)} informational, {len(commercial_corpus)} commercial posts.")
-
-        # Find related informational articles (2-4, target 3)
-        original_corpus = self.corpus
-        
+        # Find related informational articles using existing AI method (target 3)
         related_info = []
-        if informational_corpus:
-            self.corpus = informational_corpus
-            related_info = self.get_related_articles(topic, [category], count=3)
-            
-        # Find relevant commercial articles (2-3, target 2)
-        related_comm = []
-        if commercial_corpus:
-            self.corpus = commercial_corpus
-            related_comm = self.get_related_articles(topic, [category], count=2)
-
-        # Restore original corpus
-        self.corpus = original_corpus
-
+        if self.corpus:
+            # Filter out current article
+            filtered = [item for item in self.corpus if not self.is_same_article(item, topic)]
+            informational = [item for item in filtered if not self.is_commercial(item)]
+            if informational:
+                original_corpus = self.corpus
+                self.corpus = informational
+                related_info = self.get_related_articles(topic, [category], count=3)
+                self.corpus = original_corpus
+        
+        # Find relevant commercial articles using CLIP embeddings (new logic)
+        commercial_guides = self.find_related_commercial_guides(html_content, topic, category, topic)
+        
         logger.info(f"Selected related informational: {[a['title'] for a in related_info]}")
-        logger.info(f"Selected related commercial: {[a['title'] for a in related_comm]}")
+        logger.info(f"Selected commercial guides: {[g['title'] for g in commercial_guides]}")
 
         # Combine selected articles for contextual injection
-        all_selected = related_info + related_comm
+        all_selected = related_info + [{"title": g["title"], "url": g["url"]} for g in commercial_guides]
         
         if not all_selected:
             return html_content
@@ -236,8 +334,8 @@ class InternalLinkManager:
         # Contextually inject links using the existing AI method
         html_with_links = self.inject_internal_links(html_content, all_selected)
 
-        # Generate the 'Related Articles' section at the end
-        related_section_html = self._generate_split_related_section(related_info, related_comm)
+        # Generate the 'Related Articles' section at the end (informational + commercial guides)
+        related_section_html = self._generate_split_related_section(related_info, commercial_guides)
 
         # Insert section before footer or closing div
         if "<footer>" in html_with_links:
@@ -253,16 +351,21 @@ class InternalLinkManager:
 
         return html_with_links
 
-    def _generate_split_related_section(self, related_info: List[Dict], related_comm: List[Dict]) -> str:
+def _generate_split_related_section(self, related_info: List[Dict], commercial_guides: List[Dict]) -> str:
         """Generate HTML block containing split list of related guides and recommendations."""
         info_links = "".join([f'<li><a href="{a["url"]}">{a["title"]}</a></li>' for a in related_info])
-        comm_links = "".join([f'<li><a href="{a["url"]}">{a["title"]}</a></li>' for a in related_comm])
+        comm_links = "".join([
+            f'<li><a href="{g["url"]}">{g["title"]}</a> '
+            f'<span class="relevance-badge" style="font-size:0.8em;color:#666;"> '
+            f'(relevance: {g["relevance_score"]:.2f})</span></li>'
+            for g in commercial_guides
+        ])
         
         sections = []
         if info_links:
             sections.append(f"""
             <div class="related-guides" style="margin-bottom: 20px;">
-                <h3 style="text-align: left; font-size: 1.3em;">Related Guides &amp; Tutorials</h3>
+                <h3 style="text-align: left; font-size: 1.3em;">Related Guides & Tutorials</h3>
                 <ul style="list-style-type: disc; padding-left: 20px; line-height: 1.8;">
                     {info_links}
                 </ul>
@@ -271,13 +374,13 @@ class InternalLinkManager:
         if comm_links:
             sections.append(f"""
             <div class="related-recommendations" style="margin-bottom: 20px;">
-                <h3 style="text-align: left; font-size: 1.3em;">Recommended Gear &amp; Product Reviews</h3>
+                <h3 style="text-align: left; font-size: 1.3em;">Recommended Gear & Product Reviews</h3>
                 <ul style="list-style-type: disc; padding-left: 20px; line-height: 1.8;">
                     {comm_links}
                 </ul>
             </div>
             """)
-            
+        
         inner_content = "\n".join(sections)
         
         return f"""

@@ -1,4 +1,5 @@
 import sys
+import json
 from config.logger import get_logger
 from config import settings
 from core.sheets_manager import SheetsManager
@@ -65,6 +66,25 @@ def main():
         article_with_markers = generator.generate_informational_article(blueprint, topic, keyword, category)
         logger.info("Informational article generated successfully")
         print("Article generated successfully.\n")
+
+        # --- STAGE 2.5: Monetization Validation (Publish Gate) ---
+        logger.info("Stage 2.5/7: Validating monetization structure")
+        print("--- STAGE 2.5: Validating Monetization Structure ---")
+
+        validation_passed, validation_details = generator.validate_monetization_structure(
+            article_with_markers, category, topic
+        )
+
+        if not validation_passed:
+            logger.error(f"Monetization validation failed, blocking auto-publish: {validation_details}")
+            sheets.update_row_status(row_index, "Needs Review", error=f"Monetization validation failed: {validation_details}")
+            notifier.send_report("Article Needs Review - Monetization", topic, 
+                                f"Auto-publish blocked. Missing monetization elements:\n{json.dumps(validation_details, indent=2)}")
+            print(f"VALIDATION FAILED - Article flagged for manual review")
+            print(f"Details: {validation_details}")
+            sys.exit(0)  # Exit gracefully, don't mark as Failed
+
+        print(f"Validation PASSED: {validation_details.get('named_product_count', 0)} named products found")
 
         # --- STAGE 3: Publish FIRST to get Blogger Post ID ---
         logger.info("Stage 3/7: Publishing to Blogger to get Post ID")
