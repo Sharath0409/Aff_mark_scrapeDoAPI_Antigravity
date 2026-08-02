@@ -14,6 +14,22 @@ logger = get_logger("main_informational")
 INFORMATIONAL_WORKSHEET = "Informational_Topics"
 
 
+def log_stage_start(stage_num, total_stages, stage_name):
+    logger.info(f"Stage {stage_num}/{total_stages}: {stage_name}")
+    print(f"--- STAGE {stage_num}: {stage_name} ---")
+
+def log_stage_pass(stage_num, total_stages, stage_name, details=""):
+    logger.info(f"Stage {stage_num}/{total_stages} PASSED: {stage_name} {details}")
+    print(f"Stage {stage_num}/{total_stages} PASSED: {stage_name} {details}")
+
+def log_stage_fail(stage_num, total_stages, stage_name, error, blocking=True):
+    logger.error(f"Stage {stage_num}/{total_stages} FAILED: {stage_name} - {error}")
+    print(f"Stage {stage_num}/{total_stages} FAILED: {stage_name} - {error}")
+    if blocking:
+        logger.error(f"Blocking failure - workflow will exit")
+        print(f"Blocking failure - workflow will exit")
+
+
 def main():
     logger.info("Starting Informational Publishing Workflow.")
 
@@ -52,91 +68,98 @@ def main():
     optimizer = ImageOptimizer()
     link_manager = InternalLinkManager(publisher)
 
+    TOTAL_STAGES = 8
+    post_id = None
+    published_url = None
+
     try:
         # --- STAGE 1: Generate Content Blueprint ---
-        logger.info("Stage 1/7: Generating content blueprint")
-        print("--- STAGE 1: Generating Content Blueprint ---")
+        log_stage_start(1, TOTAL_STAGES, "Generating Content Blueprint")
         blueprint = generator.generate_informational_blueprint(topic, keyword, category)
-        logger.info("Content blueprint generated successfully")
-        print("Blueprint generated successfully.\n")
+        log_stage_pass(1, TOTAL_STAGES, "Content Blueprint", f"Blueprint length: {len(blueprint)} chars")
 
         # --- STAGE 2: Generate Article with Image Markers (Call 1) ---
-        logger.info("Stage 2/7: Generating informational article with image markers")
-        print("--- STAGE 2: Generating Informational Article with Markers ---")
+        log_stage_start(2, TOTAL_STAGES, "Generating Informational Article with Markers")
         article_with_markers = generator.generate_informational_article(blueprint, topic, keyword, category)
-        logger.info("Informational article generated successfully")
-        print("Article generated successfully.\n")
+        log_stage_pass(2, TOTAL_STAGES, "Article Generation", f"Article length: {len(article_with_markers)} chars")
 
         # --- STAGE 2.5: Monetization Validation (Publish Gate) ---
-        logger.info("Stage 2.5/7: Validating monetization structure")
-        print("--- STAGE 2.5: Validating Monetization Structure ---")
-
+        log_stage_start(2.5, TOTAL_STAGES, "Validating Monetization Structure")
         validation_passed, validation_details = generator.validate_monetization_structure(
             article_with_markers, category, topic
         )
 
         if not validation_passed:
-            logger.error(f"Monetization validation failed, blocking auto-publish: {validation_details}")
+            log_stage_fail(2.5, TOTAL_STAGES, "Monetization Validation", f"Details: {validation_details}", blocking=True)
             sheets.update_row_status(row_index, "Needs Review", error=f"Monetization validation failed: {validation_details}")
             notifier.send_report("Article Needs Review - Monetization", topic, 
                                 f"Auto-publish blocked. Missing monetization elements:\n{json.dumps(validation_details, indent=2)}")
             print(f"VALIDATION FAILED - Article flagged for manual review")
             print(f"Details: {validation_details}")
-            sys.exit(0)  # Exit gracefully, don't mark as Failed
+            sys.exit(0)
 
-        print(f"Validation PASSED: {validation_details.get('named_product_count', 0)} named products found")
+        log_stage_pass(2.5, TOTAL_STAGES, "Monetization Validation", f"Named products: {validation_details.get('named_product_count', 0)}")
 
         # --- STAGE 3: Publish FIRST as DRAFT to get Blogger Post ID ---
-        logger.info("Stage 3/7: Publishing to Blogger as draft to get Post ID")
-        print("--- STAGE 3: Publishing to Blogger as draft (get Post ID) ---")
+        log_stage_start(3, TOTAL_STAGES, "Publishing to Blogger as draft (get Post ID)")
         seo_labels = generator.generate_seo_tags(topic, keyword)
         if category not in seo_labels:
             seo_labels.append(category)
         
         published_url, post_id = publisher.publish_post_as_draft(topic, article_with_markers, labels=seo_labels)
-        logger.info(f"Article published as draft (with markers): {published_url} (Post ID: {post_id})")
+        log_stage_pass(3, TOTAL_STAGES, "Draft Publish", f"Post ID: {post_id}, URL: {published_url}")
         print(f"Published as draft to Blogger: {published_url}")
         print(f"Post ID: {post_id}\n")
 
         # --- STAGE 4: Generate Images and UPDATE Blogger Post (Call 2 + 3) ---
-        logger.info("Stage 4/7: Generating images via HF and updating Blogger post")
-        print("--- STAGE 4: Generating Images via HF and Updating Blogger ---")
-        article_with_images, image_manifest = generator.generate_images_and_update_post(
-            article_with_markers, post_id, topic, keyword, category, publisher
-        )
-        logger.info("Images generated and Blogger post updated")
-        print("Images generated and Blogger post updated.\n")
+        log_stage_start(4, TOTAL_STAGES, "Generating Images via HF and Updating Blogger")
+        try:
+            article_with_images, image_manifest = generator.generate_images_and_update_post(
+                article_with_markers, post_id, topic, keyword, category, publisher
+            )
+            log_stage_pass(4, TOTAL_STAGES, "Image Generation", f"Images generated: {len(image_manifest)}")
+        except Exception as e:
+            log_stage_fail(4, TOTAL_STAGES, "Image Generation", str(e), blocking=True)
+            raise
 
         # --- STAGE 5: Internal Linking ---
-        logger.info("Stage 5/7: Generating internal links")
-        print("--- STAGE 5: Generating Internal Links ---")
-        link_manager.refresh_corpus()
-        final_html = link_manager.link_informational_article(article_with_images, topic, category)
-        logger.info("Internal links generated successfully")
-        print("Internal links generated successfully.\n")
+        log_stage_start(5, TOTAL_STAGES, "Generating Internal Links")
+        try:
+            link_manager.refresh_corpus()
+            final_html = link_manager.link_informational_article(article_with_images, topic, category)
+            log_stage_pass(5, TOTAL_STAGES, "Internal Linking", "Links injected and related section added")
+        except Exception as e:
+            log_stage_fail(5, TOTAL_STAGES, "Internal Linking", str(e), blocking=True)
+            raise
 
         # --- STAGE 6: Update Blogger Post with Internal Links ---
-        logger.info("Stage 6/7: Updating Blogger post with internal links")
-        print("--- STAGE 6: Updating Blogger Post with Internal Links ---")
-        publisher.update_post(post_id, {"content": final_html, "labels": seo_labels})
-        logger.info("Blogger post updated with internal links")
-        print("Blogger post updated with internal links.\n")
+        log_stage_start(6, TOTAL_STAGES, "Updating Blogger Post with Internal Links")
+        try:
+            publisher.update_post(post_id, {"content": final_html, "labels": seo_labels})
+            log_stage_pass(6, TOTAL_STAGES, "Post Update", "Content updated with internal links")
+        except Exception as e:
+            log_stage_fail(6, TOTAL_STAGES, "Post Update", str(e), blocking=True)
+            raise
 
         # --- STAGE 7: Google Sheets Updates ---
-        logger.info("Stage 7/7: Updating Google Sheets")
-        print("--- STAGE 7: Updating Google Sheets ---")
-        sheets.update_row_status(row_index, "Success", url=published_url, post_id=post_id)
-        sheets.update_dashboard_stats("Success")
-        sheets.log_execution(topic, "Success", url=published_url)
-        logger.info("Google Sheets updated successfully")
-        print("Google Sheets updated successfully.\n")
+        log_stage_start(7, TOTAL_STAGES, "Updating Google Sheets")
+        try:
+            sheets.update_row_status(row_index, "Success", url=published_url, post_id=post_id)
+            sheets.update_dashboard_stats("Success")
+            sheets.log_execution(topic, "Success", url=published_url)
+            log_stage_pass(7, TOTAL_STAGES, "Sheets Update", "Status, dashboard, and execution log updated")
+        except Exception as e:
+            log_stage_fail(7, TOTAL_STAGES, "Sheets Update", str(e), blocking=True)
+            raise
 
         # --- STAGE 8: Publish the draft post ---
-        logger.info("Stage 8/8: Publishing draft post to live")
-        print("--- STAGE 8: Publishing Draft Post to Live ---")
-        publisher.publish_draft_post(post_id)
-        logger.info(f"Draft post {post_id} published successfully")
-        print("Draft post published successfully.\n")
+        log_stage_start(8, TOTAL_STAGES, "Publishing Draft Post to Live")
+        try:
+            publisher.publish_draft_post(post_id)
+            log_stage_pass(8, TOTAL_STAGES, "Draft-to-Live", f"Post {post_id} now live")
+        except Exception as e:
+            log_stage_fail(8, TOTAL_STAGES, "Draft-to-Live", str(e), blocking=True)
+            raise
 
         # --- SUCCESS: Send Email Notification ---
         success_message = f"Informational article published successfully.\n\nTopic: {topic}\nURL: {published_url}\nPost ID: {post_id}\nImages: {len(image_manifest)}"

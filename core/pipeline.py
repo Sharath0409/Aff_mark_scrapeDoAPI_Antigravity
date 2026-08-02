@@ -163,6 +163,18 @@ def process_row(
     sheets.log_execution(topic, "Draft", url=published_url, product_count=len(products_data))
     
     logger.info(f"--- DRAFT PUBLISHED FOR ROW {row_index}: {topic} ---")
+    
+    # 9. Flip to published
+    logger.info(f"Stage 9/9: Publishing draft post {current_post_id} to live")
+    publisher.publish_draft_post(current_post_id)
+    logger.info(f"Draft post {current_post_id} published successfully")
+    
+    # 10. Update Google Sheets with final published status
+    sheets.update_row_status(row_index, "Success", url=published_url, post_id=current_post_id, product_count=len(products_data))
+    sheets.update_dashboard_stats("Success")
+    sheets.log_execution(topic, "Success", url=published_url, product_count=len(products_data))
+    
+    logger.info(f"--- SUCCESS FOR ROW {row_index}: {topic} ---")
     return True
 
 

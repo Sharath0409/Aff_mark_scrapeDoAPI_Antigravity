@@ -168,8 +168,11 @@ class BloggerPublisher:
         logger.info(f"Setting post {post_id} status to {'draft' if is_draft else 'published'}")
         try:
             post = self.get_post(post_id)
+            # Blogger API v3 uses 'status' field: 'LIVE', 'DRAFT', or 'SCHEDULED'
             post['status'] = 'DRAFT' if is_draft else 'LIVE'
-            return self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post).execute()
+            updated = self.service.posts().update(blogId=self.blog_id, postId=post_id, body=post).execute()
+            logger.info(f"Post {post_id} status updated to {updated.get('status', 'unknown')}")
+            return updated
         except Exception as e:
             logger.error(f"Error setting post status: {e}")
             raise
