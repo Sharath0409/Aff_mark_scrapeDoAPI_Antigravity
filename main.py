@@ -47,17 +47,35 @@ def main():
             logger.info("No pending rows found. Pipeline finished.")
             return
 
-        # Process row with guaranteed cleanup
-        process_row_with_cleanup(
+        topic = row['Topic']
+        row_index = row['row_index']
+        
+        # 4. Process row with guaranteed cleanup - returns success status
+        success = process_row_with_cleanup(
             sheets, scraper, generator, publisher, link_manager,
             optimizer, uploader, row
         )
         
-        topic = row['Topic']
-        published_url = row.get('Blog URL', '')
-        logger.info(f"Pipeline finished successfully for topic: {topic}")
-        notifier.send_report("Success", topic, f"Post published at: {published_url}")
-        
+        if success:
+            # Re-fetch the live URL from the sheet (written by pipeline)
+            updated_row = sheets.get_all_rows()
+            if updated_row and len(updated_row) > row_index:
+                row_data = updated_row[row_index - 1]  # row_index is 1-based
+                headers = updated_row[0]
+                if "Blog URL" in headers:
+                    published_url = row_data[headers.index("Blog URL")]
+                else:
+                    published_url = "URL not found in sheet"
+            else:
+                published_url = "Could not re-fetch from sheet"
+            
+            logger.info(f"Pipeline finished successfully for topic: {topic}")
+            notifier.send_report("Success", topic, f"Post published at: {published_url}")
+            print(f"\n✅ Pipeline completed successfully. Live URL: {published_url}")
+        else:
+            logger.info(f"Pipeline skipped for topic: {topic} (duplicate)")
+            print(f"\n⏭️ Pipeline skipped (duplicate topic)")
+         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}", exc_info=True)
         if 'row' in locals() and row:
@@ -74,6 +92,8 @@ def main():
             notifier.send_report("Failure", topic if 'topic' in locals() else "Unknown", str(e))
         except:
             pass
+        print(f"\n❌ Pipeline FAILED: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

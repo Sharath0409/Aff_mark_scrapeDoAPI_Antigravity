@@ -959,6 +959,11 @@ class ContentGenerator:
                 background: linear-gradient(135deg, #d97706, #b45309); 
             }
             
+            /* Verdict cell styling - ensures clear separation between label and button */
+            .verdict-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+            .verdict-label { font-weight: 700; font-size: 0.85em; color: #92400e; text-align: center; line-height: 1.3; }
+            .verdict-cell .btn { margin-top: 4px; }
+            
             .quick-summary-box { background: #fffbeb; border: 1px solid #fef3c7; padding: 25px; border-radius: 12px; margin: 40px 0; }
             
             /* Responsive breakpoints */
@@ -1155,7 +1160,20 @@ class ContentGenerator:
         from core.blogger_publisher import insert_jump_break_after_first_paragraph
         final_html = insert_jump_break_after_first_paragraph(final_html)
         
-        return self._apply_quality_corrections(final_html, topic, keyword)
+        # Apply quality corrections (US focus, EEAT, etc.)
+        final_html = self._apply_quality_corrections(final_html, topic, keyword)
+        
+        # Post-generation quality check: detect repeated 3+ word sequences
+        repeated_phrases = self._detect_repeated_phrases(final_html)
+        if repeated_phrases:
+            logger.warning(f"Repeated phrases detected in '{topic}': {repeated_phrases}")
+        
+        # Post-generation check: validate all products have images
+        missing_images = self._check_product_images(final_html, products)
+        if missing_images:
+            logger.warning(f"Products missing images in '{topic}': {missing_images}")
+        
+        return final_html
 
     def generate_informational_blueprint(self, topic: str, keyword: str, category: str) -> str:
         """Generate a content planning blueprint for an informational article."""
@@ -1211,5 +1229,77 @@ class ContentGenerator:
                 if total_length + len(safe_tag) + 1 < 180: # Keep a safe buffer
                     safe_tags.append(safe_tag)
                     total_length += len(safe_tag) + 1
-                
+                 
         return safe_tags
+
+    def _detect_repeated_phrases(self, html: str, min_words: int = 3) -> list:
+        """
+        Detect repeated sequences of min_words+ words within the same sentence.
+        Returns list of (phrase, count) tuples for flagged repetitions.
+        """
+        from bs4 import BeautifulSoup
+        import re
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        text = soup.get_text()
+        
+        # Split into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        flagged = []
+        seen_phrases = {}
+        
+        for sentence in sentences:
+            words = re.findall(r'\b\w+\b', sentence.lower())
+            if len(words) < min_words:
+                continue
+                
+            # Check all n-grams of length min_words to min_words+2
+            for n in range(min_words, min(min_words + 3, len(words) + 1)):
+                for i in range(len(words) - n + 1):
+                    phrase = ' '.join(words[i:i+n])
+                    # Skip common stop-word-only phrases
+                    if phrase in seen_phrases:
+                        seen_phrases[phrase] += 1
+                    else:
+                        seen_phrases[phrase] = 1
+        
+        # Flag phrases that appear 2+ times (repeated within article)
+        for phrase, count in seen_phrases.items():
+            if count >= 2:
+                flagged.append((phrase, count))
+        
+        # Sort by count descending, then by phrase length descending
+        flagged.sort(key=lambda x: (-x[1], -len(x[0])))
+        return flagged[:10]  # Return top 10 most repeated
+
+    def _check_product_images(self, html: str, products: list) -> list:
+        """
+        Check if all products in the article have valid image tags.
+        Returns list of product titles missing images.
+        """
+        from bs4 import BeautifulSoup
+        import re
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        missing = []
+        
+        for product in products:
+            title = product.get('title', '')
+            if not title:
+                continue
+            
+            # Check if product section has an image
+            product_section = None
+            for section in soup.find_all('section', class_='product-section'):
+                h3 = section.find('h3', class_='product-title')
+                if h3 and title.lower() in h3.get_text().lower():
+                    product_section = section
+                    break
+            
+            if product_section:
+                img = product_section.find('img')
+                if not img or not img.get('src') or img.get('src').strip() == '':
+                    missing.append(title)
+        
+        return missing

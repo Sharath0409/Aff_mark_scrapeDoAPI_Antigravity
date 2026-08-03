@@ -109,6 +109,10 @@ class AmazonScraper:
                 else:
                     details['image_url'] = hi_res or img_tag.get('src', '')
             
+            # Validate image URL was found
+            if not details['image_url']:
+                logger.warning(f"No image URL found for product: {url}")
+            
             # Extract Delivery Location (to ensure it's not India)
             delivery_tag = soup.find('span', id='glow-ingress-line2')
             if delivery_tag and "India" in delivery_tag.text:
