@@ -455,8 +455,9 @@ class ContentGenerator:
         from bs4 import BeautifulSoup
         import re
         
-        # Configuration: 2-3 named products minimum (not 5)
-        MIN_NAMED_PRODUCTS_THRESHOLD = 3
+        # Configuration: 5-7 named products required (per requirements)
+        MIN_NAMED_PRODUCTS_THRESHOLD = 5
+        MAX_NAMED_PRODUCTS_THRESHOLD = 7
         
         # Equipment/product keywords - broader detection based on content, not just category
         equipment_keywords = [
@@ -480,40 +481,53 @@ class ContentGenerator:
         soup = BeautifulSoup(html, 'html.parser')
         
         # 1. Count named product mentions with price ranges and Amazon links
-        # Look for: "Product Name ($150–$200)" with affiliate link nearby
+        # Look for actual product names with prices - improved patterns
         product_patterns = [
-            # Pattern 1: "Product Name ($150–$200)" with affiliate link
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*\(?\s*\$?\d+\s*[–\-]\s*\$?\d+\s*\)?',
-            # Pattern 2: "Product Name — $150" or "Product Name - $150"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s*[—\-]\s*\$?\d+',
-            # Pattern 3: "Product Name approx. $150"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+approx\.\s*\$?\d+',
-            # Pattern 4: "Product Name around $150"
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+around\s+\$?\d+',
-            # Pattern 5: "Product Name $150–$200" (no parentheses)
-            r'[A-Z][a-zA-Z0-9\s\-\.]+?\s+\$?\d+\s*[–\-]\s*\$?\d+',
-            # Pattern 6: Table cell with product name and price
-            r'<td[^>]*>\s*[A-Z][a-zA-Z0-9\s\-\.]+?\s*</td>\s*<td[^>]*>\s*\$?\d+',
+            # Pattern: "Product Name ($150–$200)" or "Product Name ($150)"
+            r'[A-Z][a-zA-Z0-9\s\-\.]{2,60}?\s*\(\s*\$?\d+(?:\s*[–\-]\s*\$?\d+)?\s*\)',
+            # Pattern: "Product Name — $150" or "Product Name - $150"
+            r'[A-Z][a-zA-Z0-9\s\-\.]{2,60}?\s*[—\-]\s*\$?\d+(?:\.\d{2})?',
+            # Pattern: "Product Name approx. $150"
+            r'[A-Z][a-zA-Z0-9\s\-\.]{2,60}?\s+approx\.\s*\$?\d+(?:\.\d{2})?',
+            # Pattern: "Product Name around $150"
+            r'[A-Z][a-zA-Z0-9\s\-\.]{2,60}?\s+around\s+\$?\d+(?:\.\d{2})?',
+            # Pattern: "Product Name $150–$200" (no parentheses)
+            r'[A-Z][a-zA-Z0-9\s\-\.]{2,60}?\s+\$?\d+\s*[–\-]\s*\$?\d+',
         ]
         
         named_products = set()
         for pattern in product_patterns:
             matches = re.findall(pattern, html)
             for m in matches:
+                # Clean up - remove price parts and trailing punctuation
                 clean = re.sub(r'\s*[\(—\-]\s*\$?\d+.*$', '', m).strip()
                 clean = re.sub(r'\s+\$?\d+\s*[–\-].*$', '', clean).strip()
-                clean = re.sub(r'^<td[^>]*>\s*|\s*</td>$', '', clean).strip()
-                clean = clean.strip('.,;:')
-                if len(clean) > 3:
-                    named_products.add(clean)
+                clean = clean.strip('.,;:()')
+                # Filter out obvious non-products (too short, common words, HTML fragments)
+                if len(clean) >= 4 and len(clean) <= 80:
+                    # Exclude common false positives
+                    lower_clean = clean.lower()
+                    if not any(fp in lower_clean for fp in [
+                        'built-in', 'screen size', 'refresh rate', 'price', 'with a',
+                        'competitive', 'capability', 'higher price', 'speakers', 'td>',
+                        'out of', 'rating', 'review', 'amazon', 'check current',
+                        'best for', 'ideal for', 'great for', 'strong choice',
+                        'recommended', 'optimized', 'well-matched', 'particular'
+                    ]):
+                        named_products.add(clean)
         
         named_count = len(named_products)
         
-        # 2. Check for recommendations table (Budget/Mid-Range/Premium)
-        has_rec_table = bool(soup.find('table')) and \
-                        ('budget pick' in html_lower or 'mid-range pick' in html_lower or 'mid range pick' in html_lower or 'premium pick' in html_lower)
+        # 2. Check for recommendations table (Budget/Mid-Range/Premium) - more flexible
+        has_rec_table = bool(soup.find('table'))
+        if has_rec_table:
+            table_text = soup.find('table').get_text().lower()
+            # Check for common recommendation indicators
+            rec_indicators = ['budget', 'mid-range', 'mid range', 'premium', 'best overall', 
+                             'best value', 'top pick', 'editor', 'choice', 'recommend']
+            has_rec_table = any(indicator in table_text for indicator in rec_indicators)
         
-        # 3. Check for at least one real citation with actual URL (not just acronym)
+        # 3. Check for at least one real citation with actual URL (not just acronym) - more flexible
         has_real_citation = False
         citation_patterns = [
             r'OSHA\s+Guidelines?\s*\(?https?://[^\s\)]+',
@@ -522,6 +536,9 @@ class ContentGenerator:
             r'https?://(www\.)?osha\.gov/[^\s\)]+',
             r'https?://(www\.)?cdc\.gov/[^\s\)]+',
             r'https?://(www\.)?niosh\.gov/[^\s\)]+',
+            # More flexible: any osha/cdc/niosh mention with nearby URL
+            r'(OSHA|CDC|NIOSH)[^.\n]{0,100}https?://',
+            r'https?://[^\s\)]+(OSHA|CDC|NIOSH)',
         ]
         for pattern in citation_patterns:
             if re.search(pattern, html, re.IGNORECASE):
@@ -534,24 +551,24 @@ class ContentGenerator:
         # 5. Check for Amazon affiliate links (rel="nofollow sponsored" or similar)
         has_affiliate_links = bool(re.search(r'rel=["\']nofollow sponsored["\']|amazon\.com.*tag=', html, re.IGNORECASE))
         
-        # 6. Check that named products have price ranges (at least some)
+        # 6. Check that named products have price ranges (at least 5 products for 5-7 requirement)
         products_with_prices = 0
         for product in named_products:
-            # Check if this product name appears near a price
             product_escaped = re.escape(product)
-            price_nearby = re.search(product_escaped + r'.{0,100}\$\d+', html)
+            price_nearby = re.search(product_escaped + r'.{0,150}\$\d+', html)
             if price_nearby:
                 products_with_prices += 1
         
         # LOG THRESHOLD FOR DEBUGGING
         logger.info(f"Monetization validation for '{topic}': named_count={named_count}, with_prices={products_with_prices}, "
-                   f"threshold={MIN_NAMED_PRODUCTS_THRESHOLD}, has_rec_table={has_rec_table}, "
+                   f"threshold={MIN_NAMED_PRODUCTS_THRESHOLD}-{MAX_NAMED_PRODUCTS_THRESHOLD}, has_rec_table={has_rec_table}, "
                    f"has_citation={has_real_citation}, has_faq={has_faq}, has_affiliate={has_affiliate_links}")
         
         # ALL conditions must pass
         passed = (
             named_count >= MIN_NAMED_PRODUCTS_THRESHOLD and
-            products_with_prices >= 2 and  # At least 2 products with price ranges
+            named_count <= MAX_NAMED_PRODUCTS_THRESHOLD and
+            products_with_prices >= MIN_NAMED_PRODUCTS_THRESHOLD and
             has_rec_table and
             has_real_citation and
             has_faq and
@@ -568,13 +585,14 @@ class ContentGenerator:
             "has_real_citation": has_real_citation,
             "has_faq_section": has_faq,
             "has_affiliate_links": has_affiliate_links,
-            "threshold": MIN_NAMED_PRODUCTS_THRESHOLD,
+            "threshold_min": MIN_NAMED_PRODUCTS_THRESHOLD,
+            "threshold_max": MAX_NAMED_PRODUCTS_THRESHOLD,
         }
         
         if not passed:
             logger.warning(f"Monetization validation FAILED for '{topic}': "
-                          f"named_count={named_count} (need >={MIN_NAMED_PRODUCTS_THRESHOLD}), "
-                          f"products_with_prices={products_with_prices} (need >=2), "
+                          f"named_count={named_count} (need {MIN_NAMED_PRODUCTS_THRESHOLD}-{MAX_NAMED_PRODUCTS_THRESHOLD}), "
+                          f"products_with_prices={products_with_prices} (need >={MIN_NAMED_PRODUCTS_THRESHOLD}), "
                           f"rec_table={has_rec_table}, citation={has_real_citation}, "
                           f"faq={has_faq}, affiliate={has_affiliate_links}")
         else:
